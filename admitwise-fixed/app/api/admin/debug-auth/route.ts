@@ -3,7 +3,7 @@ import { cookies } from "next/headers"
 import jwt from "jsonwebtoken"
 import { jwtVerify } from "jose"
 
-const ADMIN_COOKIE_NAME = "admin_session"
+const ADMIN_COOKIE_NAME = process.env.NODE_ENV === "production" ? "__Secure-admin_session" : "admin_session"
 
 function getJwtSecret(): string {
   return process.env.NEXTAUTH_SECRET || "admitwise-admin-secret"

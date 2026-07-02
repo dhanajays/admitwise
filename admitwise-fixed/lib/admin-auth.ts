@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken"
 import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 
-const ADMIN_COOKIE_NAME = "admin_session"
+const ADMIN_COOKIE_NAME = process.env.NODE_ENV === "production" ? "__Secure-admin_session" : "admin_session"
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || "admitwise-admin-secret"
 const ADMIN_ROLES = ["Super Admin", "Manager", "Support Executive", "Counsellor"]
 
