@@ -156,14 +156,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
         {/* Logout bottom */}
         <div className="border-t border-slate-200 p-4">
-          <form action="/api/auth/admin/login" method="DELETE">
-            <Link
-              href="/api/auth/admin/logout"
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-red-650 hover:bg-red-50 hover:text-red-750 transition-colors"
+          <form action="/api/auth/admin/logout" method="POST">
+            <button
+              type="submit"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-red-650 hover:bg-red-50 hover:text-red-750 transition-colors bg-transparent border-0 cursor-pointer text-left"
             >
               <LogOut className="h-4 w-4 shrink-0" />
               <span>Sign Out</span>
-            </Link>
+            </button>
           </form>
         </div>
       </aside>
