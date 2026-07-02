@@ -17,6 +17,7 @@ const jakarta = Plus_Jakarta_Sans({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://admitwiseedu.com'),
   title: 'AdmitWise — Smart Guidance. Better Admissions.',
   description:
     'India\u2019s data-driven college admission predictor and counselling platform for Engineering and Medical aspirants. Predict your colleges, compare cutoffs, and get expert guidance.',
