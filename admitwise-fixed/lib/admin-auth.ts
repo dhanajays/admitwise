@@ -25,8 +25,10 @@ export function signAdminToken(payload: AdminSessionPayload): string {
  */
 export function verifyAdminToken(token: string): AdminSessionPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as AdminSessionPayload
-  } catch {
+    const decoded = jwt.verify(token, JWT_SECRET) as AdminSessionPayload
+    return decoded
+  } catch (err) {
+    console.error("[AdminAuth] verifyAdminToken failed:", err)
     return null
   }
 }
@@ -37,9 +39,16 @@ export function verifyAdminToken(token: string): AdminSessionPayload | null {
  */
 export async function getAdminSession(): Promise<AdminSessionPayload | null> {
   const cookieStore = await cookies()
+  const allCookies = cookieStore.getAll().map((c) => c.name)
+  console.log(`[AdminAuth] getAdminSession: All cookies in store: ${allCookies.join(", ")}`)
   const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value
-  if (!token) return null
-  return verifyAdminToken(token)
+  if (!token) {
+    console.log(`[AdminAuth] getAdminSession: "${ADMIN_COOKIE_NAME}" cookie not found.`)
+    return null
+  }
+  const session = verifyAdminToken(token)
+  console.log(`[AdminAuth] getAdminSession: Token verification result: ${!!session}`)
+  return session
 }
 
 /**

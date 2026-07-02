@@ -90,14 +90,20 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Use the secure admin cookie session — completely separate from student NextAuth
   const adminSession = await getAdminSession()
 
+  console.log(`[AdminLayout] Rendering dashboard layout. Session found: ${!!adminSession}`)
+
   if (!adminSession) {
+    console.log(`[AdminLayout] Redirecting to /admin/login because adminSession is null.`)
     redirect("/admin/login")
   }
 
   const userRole = adminSession.role
   const allowedAdminRoles = ["Super Admin", "Manager", "Support Executive", "Counsellor"]
 
+  console.log(`[AdminLayout] Admin role: ${userRole}, is allowed: ${allowedAdminRoles.includes(userRole)}`)
+
   if (!allowedAdminRoles.includes(userRole)) {
+    console.log(`[AdminLayout] Redirecting to /admin/login because role "${userRole}" is not allowed.`)
     redirect("/admin/login")
   }
 

@@ -266,12 +266,38 @@ export const authOptions: NextAuthOptions = {
       }
       return session
     },
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith("/")) {
+        return `${baseUrl}${url}`
+      }
+      try {
+        const urlObj = new URL(url)
+        const baseObj = new URL(baseUrl)
+        if (urlObj.hostname === baseObj.hostname) {
+          return url
+        }
+      } catch {
+        // Fallback
+      }
+      return baseUrl
+    },
   },
   pages: {
     signIn: "/login",
     signOut: "/",
     error: "/login",
     newUser: "/dashboard",
+  },
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === "production" ? "__Secure-next-auth.session-token" : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
   },
   logger: {
     error(code, metadata) {
