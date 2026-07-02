@@ -5,6 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
+      disallow: ["/admin/", "/api/", "/dashboard/"],
     },
     sitemap: "https://admitwiseedu.com/sitemap.xml",
   }

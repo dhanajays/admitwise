@@ -6,6 +6,7 @@ const columns = [
     title: "Platform",
     links: [
       { href: "/predictor", label: "College Predictor" },
+      { href: "/vacant-seat-tracker", label: "Vacant Seat Tracker" },
       { href: "/plans", label: "Counselling Plans" },
       { href: "/about", label: "About Us" },
       { href: "/contact", label: "Contact" },

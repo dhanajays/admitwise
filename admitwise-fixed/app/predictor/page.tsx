@@ -1,20 +1,56 @@
+import { Metadata } from "next"
 import { ShieldCheck, Sparkles } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 import { PredictorForm } from "@/components/predictor/predictor-form"
 import { getFilterOptions } from "@/lib/predictor/data"
+import {
+  generateSeoMetadata,
+  getBreadcrumbSchema,
+  getFaqSchema,
+} from "@/lib/seo-schemas"
+import { JsonLd } from "@/components/json-ld"
 
-export const metadata = {
-  title: "Maharashtra College Predictor | AdmitWise",
-  description:
-    "Predict Engineering colleges using official MHT CET CAP cutoff data with category-wise and branch-wise recommendations.",
-}
+export const metadata: Metadata = generateSeoMetadata({
+  title: "AI MHT CET College Predictor 2026 | Predict Engineering & Medical Colleges | AdmitWise",
+  description: "Predict your Engineering & Medical colleges in Maharashtra using our AI predictor. Get precise suggestions based on MHT CET cutoffs, reservation category, and CAP rounds.",
+  canonicalUrl: "https://admitwiseedu.com/predictor",
+  keywords: [
+    "MHT CET College Predictor",
+    "AI College Predictor Maharashtra",
+    "MHT CET Predictor",
+    "MHT CET Cutoff Predictor",
+    "Engineering College Predictor",
+    "Medical College Predictor",
+    "CAP Round Predictor",
+    "Maharashtra Engineering Colleges",
+    "Engineering Counselling",
+  ],
+})
 
 export default async function PredictorPage() {
   const options = await getFilterOptions()
 
+  const breadcrumbs = getBreadcrumbSchema([
+    { name: "Home", url: "https://admitwiseedu.com" },
+    { name: "Predictor", url: "https://admitwiseedu.com/predictor" },
+  ])
+
+  const faqs = getFaqSchema([
+    {
+      question: "What is the MHT CET College Predictor?",
+      answer: "The AdmitWise MHT CET College Predictor is an AI-powered utility that helps candidates estimate their admission probability in Maharashtra engineering and medical colleges based on historical CAP round cutoff data.",
+    },
+    {
+      question: "How accurate is the AdmitWise predictor?",
+      answer: "Predictions are highly reliable because they are modeled directly using official, multi-year seat allocation datasets published by the State Common Entrance Test Cell, Maharashtra.",
+    },
+  ])
+
   return (
     <div className="flex min-h-screen flex-col bg-white">
+      <JsonLd data={breadcrumbs} />
+      <JsonLd data={faqs} />
       <SiteHeader />
 
       <main className="flex-1">

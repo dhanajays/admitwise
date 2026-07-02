@@ -1,3 +1,4 @@
+import { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { BarChart3, Heart, ShieldCheck, Target, Sparkles } from "lucide-react"
@@ -6,11 +7,20 @@ import { SiteFooter } from "@/components/site-footer"
 import { buttonVariants } from "@/components/ui/button"
 import { Reveal } from "@/components/reveal"
 import { AnimatedCounter } from "@/components/animated-counter"
+import { generateSeoMetadata, getBreadcrumbSchema } from "@/lib/seo-schemas"
+import { JsonLd } from "@/components/json-ld"
 
-export const metadata = {
-  title: "About — AdmitWise",
-  description: "AdmitWise is a data-driven admission guidance platform founded to make counselling transparent.",
-}
+export const metadata: Metadata = generateSeoMetadata({
+  title: "About AdmitWise | Our Vision, Mission & Team | MHT CET Counselling",
+  description: "Learn more about AdmitWise, India's leading AI-powered college admission counselling platform. Discover our story, mission, core values, and expert team.",
+  canonicalUrl: "https://admitwiseedu.com/about",
+  keywords: [
+    "About AdmitWise",
+    "MHT CET Admission counselling team",
+    "College cutoffs expert guidance",
+    "AdmitWise Team",
+  ],
+})
 
 const values = [
   {
@@ -36,8 +46,14 @@ const values = [
 ]
 
 export default function AboutPage() {
+  const breadcrumbs = getBreadcrumbSchema([
+    { name: "Home", url: "https://admitwiseedu.com" },
+    { name: "About", url: "https://admitwiseedu.com/about" },
+  ])
+
   return (
     <div className="flex min-h-screen flex-col bg-white">
+      <JsonLd data={breadcrumbs} />
       <SiteHeader />
       <main className="flex-1 bg-white">
         <section className="relative overflow-hidden border-b border-slate-200/50 bg-[#f8fafc] py-16">

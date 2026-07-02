@@ -1,13 +1,22 @@
+import { Metadata } from "next"
 import { Clock, Mail, MapPin, Phone, Sparkles } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 import { ContactForm } from "@/components/contact-form"
 import { Reveal } from "@/components/reveal"
+import { generateSeoMetadata, getBreadcrumbSchema } from "@/lib/seo-schemas"
+import { JsonLd } from "@/components/json-ld"
 
-export const metadata = {
-  title: "Contact — AdmitWise",
-  description: "Get in touch with the AdmitWise counselling team for predictions, reports and 1:1 guidance.",
-}
+export const metadata: Metadata = generateSeoMetadata({
+  title: "Contact AdmitWise Counselling | Get Expert Admissions Guidance",
+  description: "Contact the AdmitWise team for MHT CET admission guidance, college prediction reports, and custom counselling support. We are here to answer your queries.",
+  canonicalUrl: "https://admitwiseedu.com/contact",
+  keywords: [
+    "Contact AdmitWise",
+    "MHT CET Admission counselling support",
+    "Maharashtra college predictor contact",
+  ],
+})
 
 const details = [
   { icon: Mail, label: "Email", value: "admitwisehelp@gmail.com" },
@@ -17,8 +26,14 @@ const details = [
 ]
 
 export default function ContactPage() {
+  const breadcrumbs = getBreadcrumbSchema([
+    { name: "Home", url: "https://admitwiseedu.com" },
+    { name: "Contact", url: "https://admitwiseedu.com/contact" },
+  ])
+
   return (
     <div className="flex min-h-screen flex-col bg-white">
+      <JsonLd data={breadcrumbs} />
       <SiteHeader />
       <main className="flex-1 bg-white">
         <section className="relative overflow-hidden border-b border-slate-200/50 bg-[#f8fafc] py-16">
