@@ -5,7 +5,7 @@ import { db } from "@/lib/db"
 async function checkAdminRole() {
   const session = await getAdminSession()
   if (!session) return null
-  const allowedRoles = ["Super Admin", "Manager", "Support Executive"]
+  const allowedRoles = ["Super Admin", "Manager", "Support Executive", "Counsellor"]
   if (!allowedRoles.includes(session.role)) return null
   return session
 }

@@ -4,14 +4,19 @@ import type { NextRequest } from "next/server"
 import { jwtVerify } from "jose"
 
 const ADMIN_COOKIE_NAME = "admin_session"
-const JWT_SECRET = process.env.NEXTAUTH_SECRET || "admitwise-admin-secret"
+
+function getJwtSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET || "admitwise-admin-secret"
+  return secret
+}
 
 async function verifyAdminTokenEdge(token: string): Promise<boolean> {
   try {
-    const secret = new TextEncoder().encode(JWT_SECRET)
+    const secret = new TextEncoder().encode(getJwtSecret())
     await jwtVerify(token, secret)
     return true
-  } catch {
+  } catch (err) {
+    console.error("[Proxy] Token verification failed in Edge runtime:", err)
     return false
   }
 }
@@ -21,11 +26,14 @@ export const proxy = withAuth(
     const { pathname } = req.nextUrl
     const token = req.cookies.get(ADMIN_COOKIE_NAME)?.value
 
+    console.log(`[Proxy] Request to Pathname: ${pathname}, Cookie Token exists: ${!!token}`)
+
     // ── Admin Redirect Rules ───────────────────────────────────────────────
     // If admin is already logged in, redirect /admin/login to /admin dashboard
     if (pathname === "/admin/login") {
       if (token) {
         const isValid = await verifyAdminTokenEdge(token)
+        console.log(`[Proxy] Admin Login page request. Token valid: ${isValid}`)
         if (isValid) {
           return NextResponse.redirect(new URL("/admin", req.url))
         }
@@ -41,10 +49,13 @@ export const proxy = withAuth(
     // Protect all other /admin/* routes
     if (pathname.startsWith("/admin")) {
       if (!token) {
+        console.log(`[Proxy] Redirect to /admin/login: Token is missing for pathname: ${pathname}`)
         return NextResponse.redirect(new URL("/admin/login", req.url))
       }
       const isValid = await verifyAdminTokenEdge(token)
+      console.log(`[Proxy] Verification result for ${pathname}: ${isValid}`)
       if (!isValid) {
+        console.log(`[Proxy] Redirect to /admin/login: Token is invalid for pathname: ${pathname}`)
         return NextResponse.redirect(new URL("/admin/login", req.url))
       }
     }
@@ -54,7 +65,6 @@ export const proxy = withAuth(
   },
   {
     callbacks: {
-      // Only invoke the middleware function for protected routes
       authorized({ req, token }) {
         const { pathname } = req.nextUrl
 
