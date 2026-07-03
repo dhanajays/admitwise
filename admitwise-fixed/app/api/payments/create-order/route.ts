@@ -148,7 +148,7 @@ export async function POST(req: Request) {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      key: process.env.RAZORPAY_KEY_ID || "rzp_test_mockkeyid123",
+      key: process.env.RAZORPAY_KEY_ID || "",
       user: {
         name: session.user.name,
         email: session.user.email,

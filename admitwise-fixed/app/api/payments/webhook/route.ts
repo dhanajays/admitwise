@@ -13,6 +13,7 @@ export async function POST(req: Request) {
     const isValid = webhookSecret ? verifyRazorpayWebhookSignature(rawBody, signature, webhookSecret) : false
     const allowMockWebhook = process.env.RAZORPAY_WEBHOOK_ALLOW_MOCK === "true"
     if (!isValid && !allowMockWebhook) {
+      console.error("❌ Razorpay webhook signature verification failed. Webhook signature is invalid.")
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 })
     }
 
