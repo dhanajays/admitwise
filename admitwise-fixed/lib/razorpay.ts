@@ -7,12 +7,29 @@ const keySecret = process.env.RAZORPAY_KEY_SECRET
 // Only allow mock mode in non-production environments if credentials are missing
 const isMocked = process.env.NODE_ENV !== "production" && (!keyId || !keySecret || keyId.includes("mock"))
 
-export const razorpay = !isMocked
-  ? new Razorpay({
-      key_id: keyId,
-      key_secret: keySecret,
+let razorpayInstance: Razorpay | null = null
+
+export function getRazorpay() {
+  if (isMocked) {
+    return null
+  }
+
+  const currentKeyId = process.env.RAZORPAY_KEY_ID
+  const currentKeySecret = process.env.RAZORPAY_KEY_SECRET
+
+  if (!currentKeyId || !currentKeySecret) {
+    throw new Error("Missing Razorpay environment variables")
+  }
+
+  if (!razorpayInstance) {
+    razorpayInstance = new Razorpay({
+      key_id: currentKeyId,
+      key_secret: currentKeySecret,
     })
-  : null
+  }
+
+  return razorpayInstance
+}
 
 if (isMocked) {
   console.log("⚠️ Razorpay credentials are missing or mocked. Payments will run in mock mode.")
@@ -33,7 +50,8 @@ export async function createRazorpayOrder(amount: number, receiptId: string) {
   }
 
   try {
-    const order = await razorpay!.orders.create({
+    const client = getRazorpay()
+    const order = await client!.orders.create({
       amount: Math.round(amount * 100), // in paise
       currency: "INR",
       receipt: receiptId,
@@ -97,5 +115,6 @@ export async function createRazorpayRefund(paymentId: string, amount?: number) {
     }
   }
 
-  return razorpay!.payments.refund(paymentId, amount ? { amount: Math.round(amount * 100) } : {})
+  const client = getRazorpay()
+  return client!.payments.refund(paymentId, amount ? { amount: Math.round(amount * 100) } : {})
 }
