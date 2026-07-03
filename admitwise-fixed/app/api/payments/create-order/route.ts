@@ -145,9 +145,12 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      orderId: order.id,
+      id: order.id,
+      orderId: order.id, // kept for backward compatibility
       amount: order.amount,
       currency: order.currency,
+      receipt: order.receipt,
+      status: order.status,
       key: process.env.RAZORPAY_KEY_ID || "",
       user: {
         name: session.user.name,

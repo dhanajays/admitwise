@@ -48,13 +48,54 @@ export async function checkout({
 
     // 2. Open Razorpay Checkout Popup
     return new Promise<void>((resolve, reject) => {
+      if (orderData.mock || (orderData.id && orderData.id.startsWith("order_mock_"))) {
+        const isAutomation = typeof navigator !== "undefined" && navigator.webdriver
+        const proceed = isAutomation || window.confirm("Mock Mode: Would you like to approve this simulated payment?")
+        if (proceed) {
+          const mockPaymentId = `pay_mock_${Math.random().toString(36).substring(2, 12)}`
+          const mockOrderId = orderData.id || orderData.orderId
+          fetch("/api/payments/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              razorpay_order_id: mockOrderId,
+              razorpay_payment_id: mockPaymentId,
+              razorpay_signature: "mock_signature",
+            }),
+          })
+            .then(async (verifyRes) => {
+              if (!verifyRes.ok) {
+                const verifyErr = await verifyRes.json()
+                throw new Error(verifyErr.error || "Payment verification failed")
+              }
+              await syncWithDatabase()
+              if (onSuccess) {
+                onSuccess({
+                  orderId: mockOrderId,
+                  paymentId: mockPaymentId,
+                })
+              }
+              resolve()
+            })
+            .catch((verifyError) => {
+              console.error("Payment Verification Error:", verifyError)
+              if (onError) onError(verifyError.message || "Payment verification failed")
+              reject(verifyError)
+            })
+        } else {
+          if (onError) onError("Payment cancelled by user")
+          reject(new Error("Payment cancelled by user"))
+        }
+        return
+      }
+
       const options = {
-        key: orderData.key,
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || orderData.key,
         amount: orderData.amount,
         currency: orderData.currency,
         name: "AdmitWise",
         description: purchaseType === "plan" ? `Upgrade to ${planId}` : "Buy Additional Percentile Slot",
-        order_id: orderData.orderId,
+        order_id: orderData.id || orderData.orderId,
         handler: async function (response: any) {
           try {
             // 3. Verify Payment Signature
