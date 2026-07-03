@@ -4,7 +4,8 @@ import crypto from "crypto"
 const keyId = process.env.RAZORPAY_KEY_ID
 const keySecret = process.env.RAZORPAY_KEY_SECRET
 
-const isMocked = !keyId || !keySecret || keyId.includes("mock")
+// Only allow mock mode in non-production environments if credentials are missing
+const isMocked = process.env.NODE_ENV !== "production" && (!keyId || !keySecret || keyId.includes("mock"))
 
 export const razorpay = !isMocked
   ? new Razorpay({
@@ -42,20 +43,7 @@ export async function createRazorpayOrder(amount: number, receiptId: string) {
       mock: false,
     }
   } catch (error: any) {
-    console.error("❌ Razorpay Order Creation failed. Checking fallback to mock mode.", error)
-    // Dynamic fallback to mock mode if credentials are invalid or auth fails (e.g. 401 Unauthorized)
-    const isAuthError = error?.statusCode === 401 || (error?.error?.description && error.error.description.includes("Authentication failed"))
-    if (isAuthError) {
-      console.warn("⚠️ Razorpay credentials invalid/unauthorized. Falling back to mock mode.")
-      return {
-        id: `order_mock_${Math.random().toString(36).substring(2, 12)}`,
-        amount: Math.round(amount * 100), // in paise
-        currency: "INR",
-        receipt: receiptId,
-        status: "created",
-        mock: true,
-      }
-    }
+    console.error("❌ Razorpay Order Creation failed. Complete API error logged:", error)
     throw error
   }
 }
@@ -66,8 +54,8 @@ export function verifyRazorpaySignature(
   paymentId: string,
   signature: string
 ): boolean {
-  if (orderId.startsWith("order_mock_")) {
-    return true // Mock orders always verify
+  if (process.env.NODE_ENV !== "production" && orderId.startsWith("order_mock_")) {
+    return true // Mock orders always verify only in development/staging
   }
 
   try {

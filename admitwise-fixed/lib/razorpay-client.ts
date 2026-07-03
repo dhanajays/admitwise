@@ -49,6 +49,12 @@ export async function checkout({
     // 2. Open Razorpay Checkout Popup
     return new Promise<void>((resolve, reject) => {
       if (orderData.mock || (orderData.id && orderData.id.startsWith("order_mock_"))) {
+        if (process.env.NODE_ENV === "production") {
+          const err = new Error("Mock payments are disabled in production mode.")
+          if (onError) onError(err.message)
+          reject(err)
+          return
+        }
         const isAutomation = typeof navigator !== "undefined" && navigator.webdriver
         const proceed = isAutomation || window.confirm("Mock Mode: Would you like to approve this simulated payment?")
         if (proceed) {
