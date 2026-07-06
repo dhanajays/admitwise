@@ -47,7 +47,7 @@ export function DisabledPaymentModal({ onClose }: DisabledPaymentModalProps) {
             </div>
             <div>
               <p className="text-[10px] text-slate-450 font-semibold uppercase tracking-wider">Contact Support</p>
-              <p className="text-xs font-semibold text-slate-700 mt-0.5">admitwisehelp@gmail.com</p>
+              <p className="text-xs font-semibold text-slate-700 mt-0.5">support@admitwiseedu.com</p>
             </div>
           </div>
 

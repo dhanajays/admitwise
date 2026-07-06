@@ -19,7 +19,7 @@ export const metadata: Metadata = generateSeoMetadata({
 })
 
 const details = [
-  { icon: Mail, label: "Email", value: "admitwisehelp@gmail.com" },
+  { icon: Mail, label: "Email", value: "support@admitwiseedu.com" },
   { icon: Phone, label: "Phone", value: "+91 9209568186" },
   { icon: MapPin, label: "Office", value: "Pune, Maharashtra, India" },
   { icon: Clock, label: "Hours", value: "Mon–Sat, 10am – 7pm IST" },

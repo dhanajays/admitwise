@@ -4,6 +4,7 @@ import { Geist, Geist_Mono, Plus_Jakarta_Sans } from 'next/font/google'
 import { AuthSessionProvider } from '@/components/auth-session-provider'
 import { MandatoryPhoneGate } from '@/components/mandatory-phone-gate'
 import { GoogleAnalytics } from '@next/third-parties/google'
+import Script from 'next/script'
 import './globals.css'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -55,6 +56,13 @@ export default function RootLayout({
         </AuthSessionProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
         <GoogleAnalytics gaId="G-N2DR6NTG75" />
+        <Script
+          type="text/javascript"
+          src="https://d3mkw6s8thqya7.cloudfront.net/integration-plugin.js"
+          id="aisensy-wa-widget"
+          widget-id="aab30d"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   )

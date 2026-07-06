@@ -54,7 +54,7 @@ export function SiteFooter() {
             </p>
             <div className="mt-6 space-y-3 text-sm">
               <p className="flex items-center gap-2.5 text-slate-500 hover:text-blue-600 transition duration-300">
-                <Mail className="h-4 w-4 text-blue-500" /> admitwisehelp@gmail.com
+                <Mail className="h-4 w-4 text-blue-500" /> support@admitwiseedu.com
               </p>
               <p className="flex items-center gap-2.5 text-slate-500 hover:text-blue-600 transition duration-300">
                 <Phone className="h-4 w-4 text-blue-500" /> +91 9209568186

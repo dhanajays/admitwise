@@ -71,7 +71,7 @@ export function getOrganizationSchema() {
       "@type": "ContactPoint",
       "telephone": "+91-9209568186",
       "contactType": "customer support",
-      "email": "admitwisehelp@gmail.com",
+      "email": "support@admitwiseedu.com",
       "areaServed": "IN",
       "availableLanguage": ["English", "Hindi", "Marathi"]
     },
