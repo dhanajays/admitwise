@@ -93,4 +93,8 @@ export interface PredictionResult {
   closingAllIndiaMerit?: number
   admissionType?: string
   seatType?: string
+
+  // Search fields
+  homeUniversity?: string
+  instituteType?: string
 }

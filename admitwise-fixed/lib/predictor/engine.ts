@@ -166,6 +166,8 @@ export function predict(
       branchMatch,
       homeUniversityRelevant,
       reasons,
+      homeUniversity: row.home_university,
+      instituteType: row.status,
     }
   })
 
@@ -366,6 +368,8 @@ export function predictAllIndia(
         closingAllIndiaMerit: row.closingAllIndiaMerit,
         admissionType: row.admissionType,
         seatType: row.seatType,
+        homeUniversity: row.homeUniversity,
+        instituteType: row.admissionType,
       }
 
       const existing = matchedCollegesMap.get(key)

@@ -17,6 +17,7 @@ import { generatePredictionPDF } from "@/lib/predictor/pdf-generator"
 import { ChanceBadge } from "./chance-badge"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -26,6 +27,16 @@ import {
 } from "@/components/ui/select"
 
 type SortKey = "cutoff" | "chance" | "rank" | "name"
+
+const SEARCH_BY_OPTIONS = [
+  { value: "all", label: "All Fields" },
+  { value: "name", label: "College Name" },
+  { value: "code", label: "Institute Code" },
+  { value: "branch", label: "Branch Name" },
+  { value: "choice", label: "Choice Code" },
+  { value: "university", label: "Home University" },
+  { value: "type", label: "Institute Type" },
+]
 
 export const Results = React.memo(function Results({
   results,
@@ -45,6 +56,8 @@ export const Results = React.memo(function Results({
   const [selectedExamFilter, setSelectedExamFilter] = useState<string>("all")
   const [visibleCount, setVisibleCount] = useState<number>(40)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchBy, setSearchBy] = useState("all")
 
   // Reset filter settings if input predictions array is refreshed by the user
   useEffect(() => {
@@ -53,12 +66,14 @@ export const Results = React.memo(function Results({
     setSelectedExamFilter("all")
     setSort("cutoff")
     setVisibleCount(40)
+    setSearchQuery("")
+    setSearchBy("all")
   }, [results])
 
   // Reset visibleCount count if sorting or filters are updated
   useEffect(() => {
     setVisibleCount(40)
-  }, [sort, selectedPreference, selectedChance, selectedExamFilter])
+  }, [sort, selectedPreference, selectedChance, selectedExamFilter, searchQuery, searchBy])
 
   // Memoize filtered and sorted results to prevent expensive re-computations on re-renders
   const filteredAndSorted = useMemo(() => {
@@ -89,6 +104,41 @@ export const Results = React.memo(function Results({
         }
       }
 
+      // Advanced search query filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim()
+        const name = item.collegeName.toLowerCase()
+        const code = item.collegeCode.toLowerCase()
+        const branch = item.branchName.toLowerCase()
+        const choice = item.branchCode.toLowerCase()
+        const university = (item.homeUniversity || "").toLowerCase()
+        const type = (item.instituteType || item.status || "").toLowerCase()
+
+        if (searchBy === "name") {
+          if (!name.includes(q)) return false
+        } else if (searchBy === "code") {
+          if (!code.includes(q)) return false
+        } else if (searchBy === "branch") {
+          if (!branch.includes(q)) return false
+        } else if (searchBy === "choice") {
+          if (!choice.includes(q)) return false
+        } else if (searchBy === "university") {
+          if (!university.includes(q)) return false
+        } else if (searchBy === "type") {
+          if (!type.includes(q)) return false
+        } else {
+          // "all" fields
+          const matchedAny =
+            name.includes(q) ||
+            code.includes(q) ||
+            branch.includes(q) ||
+            choice.includes(q) ||
+            university.includes(q) ||
+            type.includes(q)
+          if (!matchedAny) return false
+        }
+      }
+
       return true
     })
 
@@ -104,7 +154,7 @@ export const Results = React.memo(function Results({
     }
 
     return data
-  }, [results, sort, selectedPreference, selectedChance, selectedExamFilter, preferredBranches])
+  }, [results, sort, selectedPreference, selectedChance, selectedExamFilter, preferredBranches, searchQuery, searchBy])
 
   const handleDownloadPDF = async () => {
     try {
@@ -122,7 +172,7 @@ export const Results = React.memo(function Results({
     }
   }
 
-  if (filteredAndSorted.length === 0) {
+  if (results.length === 0) {
     return (
       <div className="glass-card rounded-2xl border border-slate-200 p-10 text-center relative overflow-hidden bg-white/80">
         <div className="pointer-events-none absolute left-1/2 top-1/2 h-36 w-36 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500/5 filter blur-3xl" />
@@ -166,6 +216,35 @@ export const Results = React.memo(function Results({
               </>
             )}
           </Button>
+        </div>
+
+        {/* Advanced Search Panel */}
+        <div className="border-t border-b border-slate-200 py-5 my-1">
+          <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_200px]">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Search Results</span>
+              <Input
+                type="text"
+                placeholder="Search by college, code, branch, etc..."
+                value={searchQuery}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                className="h-10 text-xs border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Search By Field</span>
+              <Select value={searchBy} onValueChange={(v) => v && setSearchBy(v)}>
+                <SelectTrigger className="border-slate-200 bg-white text-slate-800 rounded-xl h-10 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-slate-200 shadow-md">
+                  {SEARCH_BY_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
 
         {/* Unified Filter Controls Panel */}
@@ -252,14 +331,22 @@ export const Results = React.memo(function Results({
       </div>
 
       {/* Cards List Container */}
-      <div className="space-y-5">
-        {filteredAndSorted.slice(0, visibleCount).map((college) => (
-          <ResultCard
-            key={`${college.rank}-${college.collegeCode}-${college.branchCode}-${college.category}`}
-            college={college}
-          />
-        ))}
-      </div>
+      {filteredAndSorted.length === 0 ? (
+        <div className="glass-card rounded-2xl border border-slate-200 p-10 text-center relative overflow-hidden bg-white/80">
+          <Info className="mx-auto h-8 w-8 text-slate-400" />
+          <h3 className="mt-4 text-sm font-semibold text-slate-900">No matching colleges found</h3>
+          <p className="mt-1 text-xs text-slate-500">Try clearing your search query or adjusting your filters.</p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {filteredAndSorted.slice(0, visibleCount).map((college) => (
+            <ResultCard
+              key={`${college.rank}-${college.collegeCode}-${college.branchCode}-${college.category}`}
+              college={college}
+            />
+          ))}
+        </div>
+      )}
 
       {filteredAndSorted.length > visibleCount && (
         <div className="flex justify-center pt-4">
