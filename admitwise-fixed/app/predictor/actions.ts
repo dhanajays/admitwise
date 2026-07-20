@@ -109,11 +109,12 @@ export async function runPrediction(
         const dbUser = await db.user.findUnique({
           where: { id: userId },
           include: {
-            subscription: true,
+            subscriptions: true,
           },
         })
 
-        if (dbUser && dbUser.subscription && dbUser.subscription.status === "active") {
+        const hasActiveSub = dbUser?.subscriptions?.some((s) => s.status === "active")
+        if (dbUser && hasActiveSub) {
           const topRec = predictions[0]
           const branchStr = input.preferredBranches.length > 0
             ? input.preferredBranches.join(", ")
