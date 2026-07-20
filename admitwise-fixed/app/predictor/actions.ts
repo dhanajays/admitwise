@@ -103,59 +103,79 @@ export async function runPrediction(
     }
 
     // Log the prediction run in database
-    if (session && session.user) {
+    let hasSavedHistory = false
+    if (session && session.user && userId) {
+      try {
+        const dbUser = await db.user.findUnique({
+          where: { id: userId },
+          include: {
+            subscription: true,
+          },
+        })
 
-      const topRec = predictions[0]
-      const branchStr = input.preferredBranches.length > 0
-        ? input.preferredBranches.join(", ")
-        : "All Branches"
+        if (dbUser && dbUser.subscription && dbUser.subscription.status === "active") {
+          const topRec = predictions[0]
+          const branchStr = input.preferredBranches.length > 0
+            ? input.preferredBranches.join(", ")
+            : "All Branches"
 
-      const examName = input.predictionType === "all-india" && input.examsList
-        ? input.examsList.map((e) => `${e.exam}:${e.percentile}`).join(", ")
-        : input.exam
+          const examName = input.predictionType === "all-india" && input.examsList
+            ? input.examsList.map((e) => `${e.exam}:${e.percentile}`).join(", ")
+            : input.exam
 
-      const maxPercentile = input.predictionType === "all-india" && input.examsList && input.examsList.length > 0
-        ? Math.max(...input.examsList.map((e) => e.percentile))
-        : input.percentile
+          const maxPercentile = input.predictionType === "all-india" && input.examsList && input.examsList.length > 0
+            ? Math.max(...input.examsList.map((e) => e.percentile))
+            : input.percentile
 
-      await db.predictionHistory.create({
-        data: {
-          userId,
-          studentName: session.user.name || "Student",
-          exam: examName,
-          percentile: maxPercentile,
-          branch: branchStr,
-          category: input.category,
-          closingPercentile: topRec ? topRec.closingPercentile : 0.0,
-          closingRank: topRec ? topRec.closingRank : 0,
-          chance: topRec ? topRec.chance : "Low",
-        },
-      })
+          await db.predictionHistory.create({
+            data: {
+              userId,
+              studentName: session.user.name || "Student",
+              exam: examName,
+              percentile: maxPercentile,
+              branch: branchStr,
+              category: input.category,
+              closingPercentile: topRec ? topRec.closingPercentile : 0.0,
+              closingRank: topRec ? topRec.closingRank : 0,
+              chance: topRec ? topRec.chance : "Low",
+            },
+          })
 
-      // Log activity
-      await db.activityLog.create({
-        data: {
-          userId,
-          action: "PREDICTION_RUN",
-          details: `Predicted colleges for ${examName} (${maxPercentile} percentile, ${input.category})`,
-        },
-      })
-    } else {
-      // Guest log
-      const examName = input.predictionType === "all-india" && input.examsList
-        ? input.examsList.map((e) => `${e.exam}:${e.percentile}`).join(", ")
-        : input.exam
+          await db.activityLog.create({
+            data: {
+              userId,
+              action: "PREDICTION_RUN",
+              details: `Predicted colleges for ${examName} (${maxPercentile} percentile, ${input.category})`,
+            },
+          })
+          
+          hasSavedHistory = true
+        }
+      } catch (dbErr) {
+        console.error("Failed to save prediction history to DB:", dbErr)
+        // Fail silently so prediction results are still returned to the user
+      }
+    }
 
-      const maxPercentile = input.predictionType === "all-india" && input.examsList && input.examsList.length > 0
-        ? Math.max(...input.examsList.map((e) => e.percentile))
-        : input.percentile
+    if (!hasSavedHistory) {
+      try {
+        const examName = input.predictionType === "all-india" && input.examsList
+          ? input.examsList.map((e) => `${e.exam}:${e.percentile}`).join(", ")
+          : input.exam
 
-      await db.activityLog.create({
-        data: {
-          action: "GUEST_PREDICTION_RUN",
-          details: `Guest predicted colleges for ${examName} (${maxPercentile} percentile, ${input.category})`,
-        },
-      })
+        const maxPercentile = input.predictionType === "all-india" && input.examsList && input.examsList.length > 0
+          ? Math.max(...input.examsList.map((e) => e.percentile))
+          : input.percentile
+
+        await db.activityLog.create({
+          data: {
+            action: "GUEST_PREDICTION_RUN",
+            details: `Guest/Free predicted colleges for ${examName} (${maxPercentile} percentile, ${input.category})`,
+          },
+        })
+      } catch (dbErr) {
+        console.error("Failed to save guest activity log to DB:", dbErr)
+      }
     }
 
     return { predictions }
@@ -163,7 +183,7 @@ export async function runPrediction(
     console.error("Prediction Error:", error)
     return {
       predictions: [],
-      error: error?.message || "Internal Server Error during prediction",
+      error: "Internal Server Error during prediction. Please try again.",
       code: "PREDICTION_ERROR",
     }
   }

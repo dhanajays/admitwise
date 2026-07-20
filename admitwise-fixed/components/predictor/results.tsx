@@ -17,7 +17,8 @@ import {
   Sparkles,
   Zap,
   ChevronRight,
-  CheckCircle2
+  CheckCircle2,
+  Award
 } from "lucide-react"
 import { useSession } from "next-auth/react"
 import type { PredictionResult, StudentInput } from "@/lib/predictor/types"
