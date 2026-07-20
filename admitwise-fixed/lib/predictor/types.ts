@@ -58,6 +58,10 @@ export interface StudentInput {
   disabilityType?: string
   defenseQuota: boolean
   preferredBranches: string[]
+  searchQuery?: string
+  filterChance?: string
+  filterBranch?: string
+  sortKey?: string
 }
 
 export interface PredictionResult {

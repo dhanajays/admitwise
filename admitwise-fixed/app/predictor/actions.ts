@@ -27,6 +27,29 @@ export async function runPrediction(
     }
     const userId = session?.user?.id
 
+    let isUserPaid = false
+    let dbUserRecord = null
+    if (userId) {
+      dbUserRecord = await db.user.findUnique({
+        where: { id: userId },
+        include: {
+          subscriptions: true,
+        },
+      })
+      isUserPaid = !!dbUserRecord?.subscriptions?.some((s) => s.status === "active")
+    }
+
+    // Backend validation: free users cannot perform search, filtering, or advanced querying
+    if (!isUserPaid && (input.searchQuery || input.filterChance || input.filterBranch || input.sortKey)) {
+      return {
+        predictions: [],
+        success: false,
+        message: "This feature is available only for Premium users.",
+        error: "This feature is available only for Premium users.",
+        code: "PREMIUM_ONLY",
+      } as any
+    }
+
     let predictions: PredictionResult[] = []
 
     if (input.predictionType === "all-india") {
@@ -104,18 +127,9 @@ export async function runPrediction(
 
     // Log the prediction run in database
     let hasSavedHistory = false
-    if (session && session.user && userId) {
+    if (session && session.user && userId && dbUserRecord && isUserPaid) {
       try {
-        const dbUser = await db.user.findUnique({
-          where: { id: userId },
-          include: {
-            subscriptions: true,
-          },
-        })
-
-        const hasActiveSub = dbUser?.subscriptions?.some((s) => s.status === "active")
-        if (dbUser && hasActiveSub) {
-          const topRec = predictions[0]
+        const topRec = predictions[0]
           const branchStr = input.preferredBranches.length > 0
             ? input.preferredBranches.join(", ")
             : "All Branches"
@@ -151,7 +165,6 @@ export async function runPrediction(
           })
           
           hasSavedHistory = true
-        }
       } catch (dbErr) {
         console.error("Failed to save prediction history to DB:", dbErr)
         // Fail silently so prediction results are still returned to the user
@@ -179,7 +192,25 @@ export async function runPrediction(
       }
     }
 
-    return { predictions }
+    let sanitizedPredictions = predictions
+    if (!isUserPaid) {
+      sanitizedPredictions = predictions.map((pred, idx) => {
+        if (idx < 5) return pred
+        return {
+          ...pred,
+          collegeName: maskCollegeName(pred.collegeName),
+          collegeCode: "LOCKED",
+          branchName: maskCollegeName(pred.branchName),
+          branchCode: "LOCKED",
+          closingPercentile: 0.0,
+          closingRank: 0,
+          closingAllIndiaMerit: 0,
+          reasons: ["Upgrade to Premium to view matching details"],
+        }
+      })
+    }
+
+    return { predictions: sanitizedPredictions }
   } catch (error: any) {
     console.error("Prediction Error:", error)
     return {
@@ -188,4 +219,11 @@ export async function runPrediction(
       code: "PREDICTION_ERROR",
     }
   }
+}
+
+function maskCollegeName(name: string): string {
+  if (!name) return ""
+  const firstChar = name[0] || ""
+  const maskedLength = Math.max(8, name.length - 1)
+  return firstChar + "*".repeat(maskedLength)
 }

@@ -280,6 +280,35 @@ export const Results = React.memo(function Results({
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
   const [isPaying, setIsPaying] = useState(false)
 
+  const renderLockedWrapper = (children: React.ReactNode, showLockIcon = true) => {
+    if (isPaid) return children
+    return (
+      <div 
+        onClick={() => setIsUpgradeModalOpen(true)}
+        className="relative cursor-not-allowed opacity-60 group select-none transition-all duration-300 hover:opacity-85 w-full"
+      >
+        <div className="pointer-events-none">
+          {children}
+        </div>
+        
+        {/* Lock indicator */}
+        {showLockIcon && (
+          <div className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">
+            <Lock className="h-3.5 w-3.5" />
+          </div>
+        )}
+
+        {/* Premium Tooltip */}
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center z-30 pointer-events-none">
+          <div className="bg-slate-900/90 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-lg whitespace-nowrap backdrop-blur-md border border-white/10 flex items-center gap-1.5">
+            <Lock className="h-3 w-3 text-blue-400" /> Available in Premium Plan
+          </div>
+          <div className="w-2.5 h-2.5 bg-slate-900/90 rotate-45 -mt-1.5 border-r border-b border-white/10" />
+        </div>
+      </div>
+    )
+  }
+
   // Reset filter settings if input predictions array is refreshed by the user
   useEffect(() => {
     setSelectedPreference("all")
@@ -319,6 +348,11 @@ export const Results = React.memo(function Results({
 
   // Memoize filtered and sorted results to prevent expensive re-computations on re-renders
   const filteredAndSorted = useMemo(() => {
+    if (!isPaid) {
+      // For free users, bypass all filtering, searching, and sorting and return the raw top-5 predictions from results
+      return results;
+    }
+
     // 1. Apply Filters
     let data = results.filter((item) => {
       // Chance Level filter
@@ -514,26 +548,32 @@ export const Results = React.memo(function Results({
           <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_200px]">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Search Results</span>
-              <Input
-                type="text"
-                placeholder="Search by college, code, branch, etc..."
-                value={searchQuery}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-                className="h-10 text-xs border-slate-200 bg-white text-slate-808 rounded-xl focus:ring-1 focus:ring-blue-500"
-              />
+              {renderLockedWrapper(
+                <Input
+                  type="text"
+                  placeholder={!isPaid ? "🔒 Unlock Premium to Search Colleges" : "Search by college, code, branch, etc..."}
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                  className="h-10 text-xs border-slate-200 bg-white text-slate-808 rounded-xl focus:ring-1 focus:ring-blue-500"
+                />,
+                false
+              )}
             </div>
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Search By Field</span>
-              <Select value={searchBy} onValueChange={(v) => v && setSearchBy(v)}>
-                <SelectTrigger className="border-slate-200 bg-white text-slate-800 rounded-xl h-10 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-white border-slate-200 shadow-md">
-                  {SEARCH_BY_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {renderLockedWrapper(
+                <Select value={searchBy} onValueChange={(v) => v && setSearchBy(v)}>
+                  <SelectTrigger className="border-slate-200 bg-white text-slate-800 rounded-xl h-10 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-slate-200 shadow-md">
+                    {SEARCH_BY_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>,
+                true
+              )}
             </div>
           </div>
         </div>
@@ -543,58 +583,67 @@ export const Results = React.memo(function Results({
           {/* Sorting Control */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sorting</span>
-            <Select value={sort} onValueChange={(v) => v && setSort(v as SortKey)}>
-              <SelectTrigger className="w-52 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="border-slate-200 bg-white shadow-lg">
-                <SelectItem value="cutoff">Highest Cutoff (Default)</SelectItem>
-                <SelectItem value="chance">Best Chance</SelectItem>
-                <SelectItem value="rank">Closing Rank</SelectItem>
-                <SelectItem value="name">College Name (A–Z)</SelectItem>
-              </SelectContent>
-            </Select>
+            {renderLockedWrapper(
+              <Select value={sort} onValueChange={(v) => v && setSort(v as SortKey)}>
+                <SelectTrigger className="w-52 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-slate-200 bg-white shadow-lg">
+                  <SelectItem value="cutoff">Highest Cutoff (Default)</SelectItem>
+                  <SelectItem value="chance">Best Chance</SelectItem>
+                  <SelectItem value="rank">Closing Rank</SelectItem>
+                  <SelectItem value="name">College Name (A–Z)</SelectItem>
+                </SelectContent>
+              </Select>,
+              true
+            )}
           </div>
 
           {/* Optional Branch Preference Control (Only if multiple branches selected) */}
           {preferredBranches && preferredBranches.length > 1 && (
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Branch Preference</span>
-              <Select value={selectedPreference} onValueChange={(v) => v && setSelectedPreference(v)}>
-                <SelectTrigger className="w-56 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="border-slate-200 bg-white shadow-lg !w-auto !min-w-(--anchor-width) !max-w-[90vw] md:!max-w-[450px]">
-                  <SelectItem value="all">All Preferred Branches</SelectItem>
-                  {preferredBranches.map((branch, idx) => {
-                    const suffix = idx === 0 ? "st" : idx === 1 ? "nd" : idx === 2 ? "rd" : "th"
-                    return (
-                      <SelectItem key={idx} value={idx.toString()}>
-                        {idx + 1}{suffix} Preference: {branch}
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
+              {renderLockedWrapper(
+                <Select value={selectedPreference} onValueChange={(v) => v && setSelectedPreference(v)}>
+                  <SelectTrigger className="w-56 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-slate-200 bg-white shadow-lg !w-auto !min-w-(--anchor-width) !max-w-[90vw] md:!max-w-[450px]">
+                    <SelectItem value="all">All Preferred Branches</SelectItem>
+                    {preferredBranches.map((branch, idx) => {
+                      const suffix = idx === 0 ? "st" : idx === 1 ? "nd" : idx === 2 ? "rd" : "th"
+                      return (
+                        <SelectItem key={idx} value={idx.toString()}>
+                          {idx + 1}{suffix} Preference: {branch}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>,
+                true
+              )}
             </div>
           )}
 
           {/* Chance Level Control */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Chance Level</span>
-            <Select value={selectedChance} onValueChange={(v) => v && setSelectedChance(v)}>
-              <SelectTrigger className="w-44 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="border-slate-200 bg-white shadow-lg">
-                <SelectItem value="all">All Chance Levels</SelectItem>
-                <SelectItem value="Very High">Very High</SelectItem>
-                <SelectItem value="High">High</SelectItem>
-                <SelectItem value="Moderate">Moderate</SelectItem>
-                <SelectItem value="Low">Low</SelectItem>
-                <SelectItem value="Very Low">Very Low</SelectItem>
-              </SelectContent>
-            </Select>
+            {renderLockedWrapper(
+              <Select value={selectedChance} onValueChange={(v) => v && setSelectedChance(v)}>
+                <SelectTrigger className="w-44 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-slate-200 bg-white shadow-lg">
+                  <SelectItem value="all">All Chance Levels</SelectItem>
+                  <SelectItem value="Very High">Very High</SelectItem>
+                  <SelectItem value="High">High</SelectItem>
+                  <SelectItem value="Moderate">Moderate</SelectItem>
+                  <SelectItem value="Low">Low</SelectItem>
+                  <SelectItem value="Very Low">Very Low</SelectItem>
+                </SelectContent>
+              </Select>,
+              true
+            )}
           </div>
 
           {/* Show Results Based On Exam Control */}
@@ -603,19 +652,22 @@ export const Results = React.memo(function Results({
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Show Results Based On
               </span>
-              <Select value={selectedExamFilter} onValueChange={(v) => v && setSelectedExamFilter(v)}>
-                <SelectTrigger className="w-48 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="border-slate-200 bg-white shadow-lg">
-                  <SelectItem value="all">All Exams</SelectItem>
-                  {enteredExams.map((exam) => (
-                    <SelectItem key={exam} value={exam}>
-                      {exam}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {renderLockedWrapper(
+                <Select value={selectedExamFilter} onValueChange={(v) => v && setSelectedExamFilter(v)}>
+                  <SelectTrigger className="w-48 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border-slate-200 bg-white shadow-lg">
+                    <SelectItem value="all">All Exams</SelectItem>
+                    {enteredExams.map((exam) => (
+                      <SelectItem key={exam} value={exam}>
+                        {exam}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>,
+                true
+              )}
             </div>
           )}
         </div>
@@ -941,21 +993,23 @@ export const Results = React.memo(function Results({
                 <Sparkles className="h-4.5 w-4.5" />
               </div>
               <h3 className="font-heading text-lg font-bold text-slate-900 leading-tight">
-                Unlock Your Complete AI Report
+                Unlock Premium Prediction
               </h3>
               <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-                Unlock instant access to all features and recommendations for your selected CAP Round.
+                Unlock advanced search, filters, AI ranking and complete college predictions.
               </p>
 
               <div className="mt-4 space-y-2.5 text-left bg-slate-50 border border-slate-105 rounded-xl p-4 text-xs font-semibold text-slate-700 shadow-sm">
                 {[
-                  "Remaining Colleges",
-                  "Branch Recommendation",
-                  "PDF Download",
+                  "Search Any College",
+                  "Search by Branch",
+                  "Advanced Filters",
+                  "Complete College List",
                   "AI Ranking",
-                  "Vacant Seat Tracker",
+                  "PDF Report",
                   "CAP Guidance",
-                  "WhatsApp Support",
+                  "Vacant Seat Tracker",
+                  "WhatsApp Expert Support",
                 ].map((feat) => (
                   <div key={feat} className="flex items-center gap-2">
                     <span className="text-[11px] text-blue-605 font-black">✓</span>
