@@ -204,55 +204,6 @@ const ResultCard = React.memo(function ResultCard({
   )
 })
 
-const FreeResultCard = React.memo(function FreeResultCard({
-  college,
-  input,
-}: {
-  college: PredictionResult
-  input: StudentInput
-}) {
-  const capRoundText = input.stage === "I" ? "CAP Round I" : input.stage === "II" ? "CAP Round II" : input.stage === "III" ? "CAP Round III" : input.stage === "IV" ? "CAP Round IV" : `CAP Round ${input.stage}`;
-  const info = getStarsAndChance(college.chance);
-
-  return (
-    <div
-      className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm transition-all duration-300 hover:scale-[1.005] hover:shadow-md animate-fade-in-up"
-    >
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-      
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-650 border border-slate-200/60">
-            {capRoundText}
-          </span>
-          <h3 className="mt-3.5 font-heading text-base font-bold text-slate-900 leading-snug">
-            {college.collegeName}
-          </h3>
-          <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-505">
-            <span className="font-medium text-slate-600">{college.branchName}</span>
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4 md:border-t-0 md:pt-0">
-          <div className="flex flex-col items-start md:items-end">
-            <span className="text-[9px] uppercase font-bold tracking-wider text-slate-400">Admission Chance</span>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs font-bold tracking-normal">{info.stars}</span>
-              <span className={`text-xs ${info.color}`}>{info.label}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-start md:items-end border-l border-slate-100 pl-4">
-            <span className="text-[9px] uppercase font-bold tracking-wider text-slate-400">Confidence</span>
-            <span className="mt-1 font-heading text-base font-extrabold text-blue-600">
-              {college.confidence}%
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-})
 
 export const Results = React.memo(function Results({
   results,
@@ -743,9 +694,12 @@ export const Results = React.memo(function Results({
                 Preview Results (Top 5 Colleges)
               </h3>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-5">
               {filteredAndSorted.slice(0, 5).map((college, idx) => (
-                <FreeResultCard key={idx} college={college} input={input} />
+                <ResultCard
+                  key={`free-${idx}-${college.collegeCode}-${college.branchCode}-${college.category}`}
+                  college={college}
+                />
               ))}
             </div>
           </div>
