@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { UpgradeModal } from "./upgrade-modal"
 
 type SortKey = "cutoff" | "chance" | "rank" | "name"
 
@@ -232,30 +233,14 @@ export const Results = React.memo(function Results({
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
   const [isPaying, setIsPaying] = useState(false)
 
-  // ESC key to close modal + body scroll lock
-  const closeUpgradeModal = useCallback(() => {
-    setIsUpgradeModalOpen(false)
-  }, [])
-
-  useEffect(() => {
-    if (isUpgradeModalOpen) {
-      document.body.style.overflow = 'hidden'
-      const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeUpgradeModal() }
-      window.addEventListener('keydown', onKey)
-      return () => {
-        document.body.style.overflow = ''
-        window.removeEventListener('keydown', onKey)
-      }
-    } else {
-      document.body.style.overflow = ''
-    }
-  }, [isUpgradeModalOpen, closeUpgradeModal])
+  const openUpgradeModal = useCallback(() => setIsUpgradeModalOpen(true), [])
+  const closeUpgradeModal = useCallback(() => setIsUpgradeModalOpen(false), [])
 
   const renderLockedWrapper = (children: React.ReactNode, showLockIcon = true) => {
     if (isPaid) return children
     return (
       <div 
-        onClick={() => setIsUpgradeModalOpen(true)}
+        onClick={openUpgradeModal}
         className="relative cursor-not-allowed opacity-60 group select-none transition-all duration-300 hover:opacity-85 w-full"
       >
         <div className="pointer-events-none">
@@ -931,7 +916,7 @@ export const Results = React.memo(function Results({
         </div>
       )}
 
-      {/* Sticky Bottom Bar on Mobile */}
+      {/* Sticky Bottom Bar — always visible for free users after prediction */}
       {!isPaid && (
         <div
           className="fixed bottom-0 left-0 right-0 z-50 bg-white/97 backdrop-blur-md border-t border-slate-200 shadow-lg animate-fade-in flex items-center justify-between px-4 pt-3"
@@ -942,7 +927,7 @@ export const Results = React.memo(function Results({
             <p className="font-heading text-base font-extrabold text-slate-900">₹499</p>
           </div>
           <Button
-            onClick={() => setIsUpgradeModalOpen(true)}
+            onClick={openUpgradeModal}
             className="rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 shadow-md shadow-blue-500/20 flex items-center gap-1.5"
           >
             Unlock Now <Lock className="h-3 w-3" />
@@ -950,107 +935,16 @@ export const Results = React.memo(function Results({
         </div>
       )}
 
-      {/* Upgrade Purchase Modal — fixed, centered, ESC-closeable, body-scroll-locked */}
-      {isUpgradeModalOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in"
-          onClick={(e) => { if (e.target === e.currentTarget) closeUpgradeModal() }}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Upgrade to Premium"
-        >
-          <div
-            className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl z-[101] animate-fade-in-up flex flex-col"
-            style={{ maxHeight: '90vh' }}
-          >
-            {/* Modal Header — sticky */}
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 border border-blue-100 text-blue-600">
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="font-heading text-base font-bold text-slate-900 leading-tight">
-                    Unlock Premium Prediction
-                  </h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    One-time payment · Instant access
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={closeUpgradeModal}
-                className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-                aria-label="Close modal"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Modal Body — scrollable on small screens */}
-            <div className="overflow-y-auto overscroll-contain px-5 py-4 flex-1">
-              <p className="text-xs text-slate-500 leading-relaxed mb-4">
-                Unlock advanced search, filters, AI ranking and complete college list for your CAP round.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-semibold text-slate-700">
-                {[
-                  "Search Any College",
-                  "Search by Branch",
-                  "Advanced Filters",
-                  "Complete College List",
-                  "AI Ranking Engine",
-                  "PDF Report Download",
-                  "CAP Round Guidance",
-                  "Vacant Seat Tracker",
-                  "WhatsApp Expert Support",
-                ].map((feat) => (
-                  <div key={feat} className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                    <span className="text-emerald-500 font-black text-sm shrink-0">✓</span>
-                    <span>{feat}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Pricing */}
-              <div className="mt-5 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-4 text-center">
-                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Today Only</p>
-                <div className="flex items-baseline justify-center gap-2 mt-1">
-                  <span className="text-slate-400 text-xs line-through font-semibold">₹2,999</span>
-                  <span className="font-heading text-3xl font-extrabold text-blue-700">₹499</span>
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">One-time · No subscription</p>
-              </div>
-            </div>
-
-            {/* Modal Footer — sticky */}
-            <div className="px-5 pb-5 pt-3 border-t border-slate-100 shrink-0 flex flex-col gap-2">
-              <Button
-                onClick={handleCheckoutPay}
-                disabled={isPaying}
-                className="w-full rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm py-3 shadow-md shadow-blue-500/20 flex items-center justify-center gap-2"
-              >
-                {isPaying ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Processing payment...
-                  </>
-                ) : (
-                  "Pay ₹499 & Unlock Instantly"
-                )}
-              </Button>
-              <button
-                type="button"
-                onClick={closeUpgradeModal}
-                className="text-xs font-semibold text-slate-400 hover:text-slate-700 py-1 transition"
-              >
-                Maybe Later
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Premium Upgrade Modal — rendered via React Portal into document.body
+           This bypasses ALL parent overflow/stacking context issues.
+           The body overflow-x-hidden on globals.css clips fixed children in Safari;
+           the portal escapes that entirely. */}
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={closeUpgradeModal}
+        onPay={handleCheckoutPay}
+        isPaying={isPaying}
+      />
     </div>
   )
 })
