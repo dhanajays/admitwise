@@ -74,6 +74,9 @@ export function PredictorForm({ options }: { options: Options }) {
   const [lastInput, setLastInput] = useState<StudentInput | null>(null)
   const [showUpgradePopup, setShowUpgradePopup] = useState(false)
   const [sub, setSub] = useState<UserSubscription | null>(null)
+  
+  // Subscription status declared at top to avoid Temporal Dead Zone (TDZ)
+  const subscribed = sub ? sub.maxProfiles > 0 && !!sub.activatedAt : false
 
 
 
@@ -233,9 +236,10 @@ export function PredictorForm({ options }: { options: Options }) {
         preferredBranches={lastInput.preferredBranches}
         enteredExams={enteredExams}
         input={lastInput}
+        isPaid={subscribed}
       />
     )
-  }, [results, lastInput])
+  }, [results, lastInput, subscribed])
 
   const handlePredict = (e: React.FormEvent) => {
     e.preventDefault()
@@ -246,11 +250,7 @@ export function PredictorForm({ options }: { options: Options }) {
       return
     }
 
-    // 2. Subscription gate
-    if (!isSubscribed()) {
-      window.location.href = "/plans"
-      return
-    }
+    const isUserPaid = isSubscribed()
 
     const activeSub = sub || getSubscription()
     const activeStats = stats || calculateUnifiedStats(
@@ -266,7 +266,33 @@ export function PredictorForm({ options }: { options: Options }) {
       const parsedPercentile = parseFloat(percentileInput)
       const targetPercentile = isNaN(parsedPercentile) ? 0 : parsedPercentile
 
-
+      if (!isUserPaid) {
+        if (targetPercentile <= 0 || targetPercentile > 100) {
+          alert("Please enter a valid percentile.")
+          return
+        }
+        startTransition(async () => {
+          const resolvedInput: StudentInput = {
+            ...form,
+            percentile: targetPercentile,
+          }
+          setLastInput(resolvedInput)
+          const res = await runPrediction(resolvedInput)
+          if (res.error) {
+            alert(res.error)
+            setResults([])
+          } else {
+            setResults(res.predictions)
+          }
+          requestAnimationFrame(() => {
+            const resultsEl = document.getElementById("results")
+            if (resultsEl) {
+              resultsEl.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          })
+        })
+        return
+      }
 
       const mhtCetProfiles = activeSub.profiles.filter(
         (p) => p.predictionType === "mht-cet" || (!p.exam.includes("JEE") && !p.exam.includes("NEET"))
@@ -341,6 +367,71 @@ export function PredictorForm({ options }: { options: Options }) {
       }
 
       const examsList: Array<{ exam: string; percentile: number }> = []
+
+      if (!isUserPaid) {
+        // Validation for JEE(Main)
+        if (useJeeMain) {
+          const val = parseFloat(jeeNewPercentile)
+          if (isNaN(val) || val < 0 || val > 100) {
+            alert("Please enter a valid JEE(Main) percentile between 0 and 100.")
+            return
+          }
+          examsList.push({ exam: "JEE(Main)", percentile: val })
+        }
+
+        // Validation for NEET
+        if (useNeet) {
+          const val = parseFloat(neetNewPercentile)
+          if (isNaN(val) || val < 0 || val > 720) {
+            alert("Please enter a valid NEET score between 0 and 720.")
+            return
+          }
+          examsList.push({ exam: "NEET", percentile: val })
+        }
+
+        // Validation for MHT-CET (for All India)
+        if (useMhtCet) {
+          const val = parseFloat(mhtNewPercentile)
+          if (isNaN(val) || val < 0 || val > 100) {
+            alert("Please enter a valid MHT-CET percentile between 0 and 100.")
+            return
+          }
+          examsList.push({ exam: mhtCetAiExam || options.exams[0] || "MHT CET PCM", percentile: val })
+        }
+
+        // Run prediction directly
+        startTransition(async () => {
+          const resolvedInput: StudentInput = {
+            gender: form.gender,
+            category: form.category,
+            homeUniversity: form.homeUniversity,
+            stage: form.stage,
+            disability: form.disability,
+            disabilityType: form.disabilityType,
+            defenseQuota: form.defenseQuota,
+            preferredBranches: form.preferredBranches,
+            predictionType: "all-india",
+            examsList,
+            exam: examsList[0]?.exam || "JEE(Main)",
+            percentile: examsList[0]?.percentile || 0,
+          }
+          setLastInput(resolvedInput)
+          const res = await runPrediction(resolvedInput)
+          if (res.error) {
+            alert(res.error)
+            setResults([])
+          } else {
+            setResults(res.predictions)
+          }
+          requestAnimationFrame(() => {
+            const resultsEl = document.getElementById("results")
+            if (resultsEl) {
+              resultsEl.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          })
+        })
+        return
+      }
 
       // 1. Validate JEE(Main)
       let jeePercentile = 0
@@ -512,8 +603,7 @@ export function PredictorForm({ options }: { options: Options }) {
     setSub(updatedSub)
   }
 
-  // Subscription status
-  const subscribed = sub ? sub.maxProfiles > 0 && !!sub.activatedAt : false
+  // Subscription status resolved at top of component
 
   return (
     <>
@@ -593,13 +683,10 @@ export function PredictorForm({ options }: { options: Options }) {
           )}
 
           {!subscribed && (
-            <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
-              <Lock className="h-3.5 w-3.5 shrink-0" />
-              <span className="text-[11px]">
-                Purchase a plan to start predicting.{" "}
-                <Link href="/plans" className="font-bold underline text-amber-700 hover:text-amber-900">
-                  View Plans →
-                </Link>
+            <div className="mt-4 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-700">
+              <Sparkles className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+              <span className="text-[11px] font-medium">
+                Free Preview Mode Active. Predict to see your top 5 colleges.
               </span>
             </div>
           )}
