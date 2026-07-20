@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo, useState, useEffect } from "react"
+import React, { useMemo, useState, useEffect, useCallback } from "react"
 import {
   Building2,
   GraduationCap,
@@ -71,9 +71,10 @@ const ResultCard = React.memo(function ResultCard({
   college: PredictionResult
 }) {
   return (
-    <div className="glass-card rounded-2xl border border-slate-200 p-6 shadow-md hover:border-blue-200 hover:shadow-lg transition duration-300 relative overflow-hidden bg-white/90">
-      <div className="flex flex-col gap-5 lg:flex-row lg:justify-between">
-        <div className="flex-1">
+    <div className="glass-card w-full min-w-0 rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-md hover:border-blue-200 hover:shadow-lg transition duration-300 relative overflow-hidden bg-white/90">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+        {/* Left: College info */}
+        <div className="flex-1 min-w-0">
           <div className="flex flex-wrap gap-2">
             <Badge className="bg-blue-50 text-blue-700 border border-blue-100 text-[10px] rounded-lg">
               Rank #{college.rank}
@@ -102,15 +103,15 @@ const ResultCard = React.memo(function ResultCard({
             )}
           </div>
 
-          <h3 className="mt-4 flex items-start gap-2.5 text-lg font-bold text-slate-900 leading-snug">
+          <h3 className="mt-4 flex items-start gap-2.5 text-base sm:text-lg font-bold text-slate-900 leading-snug break-words">
             <Building2 className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-            {college.collegeName}
+            <span>{college.collegeName}</span>
           </h3>
 
-          <div className="mt-2.5 flex flex-wrap gap-4 text-xs text-slate-500">
+          <div className="mt-2.5 flex flex-wrap gap-3 text-xs text-slate-500">
             <span className="flex items-center gap-1.5 hover:text-slate-800 transition">
-              <GraduationCap className="h-4.5 w-4.5" />
-              {college.branchName}
+              <GraduationCap className="h-4 w-4 shrink-0" />
+              <span className="break-words">{college.branchName}</span>
             </span>
             <span className="hover:text-slate-800 transition">{college.status}</span>
           </div>
@@ -119,21 +120,21 @@ const ResultCard = React.memo(function ResultCard({
             <p className="mt-1 text-[11px] text-slate-400">{college.seatSection}</p>
           )}
 
-          <div className="mt-5 space-y-2.5 border-t border-slate-100 pt-4">
+          <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
             {college.reasons.map((reason, idx) => (
               <div key={idx} className="flex items-start gap-2 text-xs text-slate-500 leading-relaxed">
-                <TrendingUp className="h-4 w-4 text-emerald-505 shrink-0 mt-0.5" />
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
                 <span>{reason}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Stats side panel inside cards */}
-        <div className="grid w-full gap-4 rounded-2xl bg-slate-50 border border-slate-200 p-4 lg:w-80 lg:grid-cols-2">
+        {/* Right: Stats panel — full width on mobile, fixed sidebar on lg+ */}
+        <div className="w-full lg:w-64 xl:w-72 shrink-0 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 border border-slate-200 p-4">
           <div>
-            <p className="text-[10px] text-slate-400 font-semibold uppercase">
-              {college.matchedUsing?.includes("NEET") ? "Closing Score" : "Closing Percentile"}
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">
+              {college.matchedUsing?.includes("NEET") ? "Closing Score" : "Closing Perc."}
             </p>
             <p className="font-bold text-slate-900 text-sm mt-0.5">
               {college.closingPercentile.toFixed(2)}
@@ -142,14 +143,14 @@ const ResultCard = React.memo(function ResultCard({
 
           {college.closingAllIndiaMerit !== undefined ? (
             <div>
-              <p className="text-[10px] text-slate-400 font-semibold uppercase">All India Merit</p>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">All India Merit</p>
               <p className="font-bold text-slate-900 text-sm mt-0.5">
                 {college.closingAllIndiaMerit.toLocaleString()}
               </p>
             </div>
           ) : (
             <div>
-              <p className="text-[10px] text-slate-400 font-semibold uppercase">Closing Rank</p>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Closing Rank</p>
               <p className="font-bold text-slate-900 text-sm mt-0.5">
                 {college.closingRank.toLocaleString()}
               </p>
@@ -158,8 +159,8 @@ const ResultCard = React.memo(function ResultCard({
 
           {college.admissionType && (
             <div>
-              <p className="text-[10px] text-slate-400 font-semibold uppercase">Admission Type</p>
-              <p className="font-bold text-slate-900 text-[11px] truncate mt-0.5" title={college.admissionType}>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Admission Type</p>
+              <p className="font-bold text-slate-900 text-[11px] mt-0.5 break-words" title={college.admissionType}>
                 {college.admissionType}
               </p>
             </div>
@@ -167,35 +168,35 @@ const ResultCard = React.memo(function ResultCard({
 
           {college.seatType && (
             <div>
-              <p className="text-[10px] text-slate-400 font-semibold uppercase">Seat Type</p>
-              <p className="font-bold text-slate-900 text-[11px] truncate mt-0.5" title={college.seatType}>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Seat Type</p>
+              <p className="font-bold text-slate-900 text-[11px] mt-0.5 break-words" title={college.seatType}>
                 {college.seatType}
               </p>
             </div>
           )}
 
           <div>
-            <p className="text-[10px] text-slate-400 font-semibold uppercase">Confidence</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Confidence</p>
             <p className="font-bold text-emerald-600 text-sm mt-0.5">{college.confidence}%</p>
           </div>
 
           <div>
-            <p className="text-[10px] text-slate-400 font-semibold uppercase">Chance Score</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Chance Score</p>
             <p className="font-bold text-blue-600 text-sm mt-0.5">{college.chanceScore}%</p>
           </div>
 
-          {/* Progress bar */}
+          {/* Progress bar — always full width in the 2-col grid */}
           <div className="col-span-2">
             <div className="h-2 overflow-hidden rounded-full bg-slate-200">
               <div
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"
+                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
                 style={{ width: `${college.chanceScore}%` }}
               />
             </div>
           </div>
 
           <div className="col-span-2 flex items-center gap-2 rounded-xl bg-blue-50 border border-blue-100 p-2.5">
-            <Trophy className="h-4.5 w-4.5 text-amber-500" />
+            <Trophy className="h-4 w-4 text-amber-500 shrink-0" />
             <span className="text-xs font-bold text-slate-800">{college.chance} Chance</span>
           </div>
         </div>
@@ -230,6 +231,25 @@ export const Results = React.memo(function Results({
   
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
   const [isPaying, setIsPaying] = useState(false)
+
+  // ESC key to close modal + body scroll lock
+  const closeUpgradeModal = useCallback(() => {
+    setIsUpgradeModalOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (isUpgradeModalOpen) {
+      document.body.style.overflow = 'hidden'
+      const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeUpgradeModal() }
+      window.addEventListener('keydown', onKey)
+      return () => {
+        document.body.style.overflow = ''
+        window.removeEventListener('keydown', onKey)
+      }
+    } else {
+      document.body.style.overflow = ''
+    }
+  }, [isUpgradeModalOpen, closeUpgradeModal])
 
   const renderLockedWrapper = (children: React.ReactNode, showLockIcon = true) => {
     if (isPaid) return children
@@ -462,7 +482,7 @@ export const Results = React.memo(function Results({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="w-full min-w-0 overflow-x-hidden space-y-8">
       {/* Filters Header Bar */}
       <div className="flex flex-col gap-5 border-b border-slate-200 pb-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -495,26 +515,26 @@ export const Results = React.memo(function Results({
         </div>
 
         {/* Advanced Search Panel */}
-        <div className="border-t border-b border-slate-200 py-5 my-1">
-          <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_200px]">
-            <div className="space-y-1">
+        <div className="border-t border-b border-slate-200 py-4 my-1">
+          <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_180px]">
+            <div className="space-y-1 min-w-0">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Search Results</span>
               {renderLockedWrapper(
                 <Input
                   type="text"
-                  placeholder={!isPaid ? "🔒 Unlock Premium to Search Colleges" : "Search by college, code, branch, etc..."}
+                  placeholder={!isPaid ? "🔒 Unlock Premium to Search Colleges" : "Search by college, code, branch..."}
                   value={searchQuery}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-                  className="h-10 text-xs border-slate-200 bg-white text-slate-808 rounded-xl focus:ring-1 focus:ring-blue-500"
+                  className="h-10 text-xs border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 w-full"
                 />,
                 false
               )}
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Search By Field</span>
               {renderLockedWrapper(
                 <Select value={searchBy} onValueChange={(v) => v && setSearchBy(v)}>
-                  <SelectTrigger className="border-slate-200 bg-white text-slate-800 rounded-xl h-10 text-xs">
+                  <SelectTrigger className="border-slate-200 bg-white text-slate-800 rounded-xl h-10 text-xs w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-slate-200 shadow-md">
@@ -529,14 +549,14 @@ export const Results = React.memo(function Results({
           </div>
         </div>
 
-        {/* Unified Filter Controls Panel */}
-        <div className="flex flex-wrap items-center gap-4">
+        {/* Unified Filter Controls Panel — wraps cleanly on all screen sizes */}
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-end gap-3">
           {/* Sorting Control */}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 min-w-0">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sorting</span>
             {renderLockedWrapper(
               <Select value={sort} onValueChange={(v) => v && setSort(v as SortKey)}>
-                <SelectTrigger className="w-52 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
+                <SelectTrigger className="w-full sm:w-48 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition text-xs h-10">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="border-slate-200 bg-white shadow-lg">
@@ -552,20 +572,20 @@ export const Results = React.memo(function Results({
 
           {/* Optional Branch Preference Control (Only if multiple branches selected) */}
           {preferredBranches && preferredBranches.length > 1 && (
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 min-w-0">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Branch Preference</span>
               {renderLockedWrapper(
                 <Select value={selectedPreference} onValueChange={(v) => v && setSelectedPreference(v)}>
-                  <SelectTrigger className="w-56 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
+                  <SelectTrigger className="w-full sm:w-52 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition text-xs h-10">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="border-slate-200 bg-white shadow-lg !w-auto !min-w-(--anchor-width) !max-w-[90vw] md:!max-w-[450px]">
+                  <SelectContent className="border-slate-200 bg-white shadow-lg max-w-[90vw]">
                     <SelectItem value="all">All Preferred Branches</SelectItem>
                     {preferredBranches.map((branch, idx) => {
                       const suffix = idx === 0 ? "st" : idx === 1 ? "nd" : idx === 2 ? "rd" : "th"
                       return (
                         <SelectItem key={idx} value={idx.toString()}>
-                          {idx + 1}{suffix} Preference: {branch}
+                          {idx + 1}{suffix} Pref: {branch}
                         </SelectItem>
                       )
                     })}
@@ -577,11 +597,11 @@ export const Results = React.memo(function Results({
           )}
 
           {/* Chance Level Control */}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 min-w-0">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Chance Level</span>
             {renderLockedWrapper(
               <Select value={selectedChance} onValueChange={(v) => v && setSelectedChance(v)}>
-                <SelectTrigger className="w-44 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
+                <SelectTrigger className="w-full sm:w-40 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition text-xs h-10">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="border-slate-200 bg-white shadow-lg">
@@ -599,13 +619,13 @@ export const Results = React.memo(function Results({
 
           {/* Show Results Based On Exam Control */}
           {enteredExams && enteredExams.length > 1 && (
-            <div className="flex flex-col gap-1.5 animate-fade-in">
+            <div className="flex flex-col gap-1.5 min-w-0 animate-fade-in">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Show Results Based On
               </span>
               {renderLockedWrapper(
                 <Select value={selectedExamFilter} onValueChange={(v) => v && setSelectedExamFilter(v)}>
-                  <SelectTrigger className="w-48 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition">
+                  <SelectTrigger className="w-full sm:w-44 border-slate-200 bg-white text-slate-800 rounded-xl focus:ring-1 focus:ring-blue-500 transition text-xs h-10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="border-slate-200 bg-white shadow-lg">
@@ -913,88 +933,120 @@ export const Results = React.memo(function Results({
 
       {/* Sticky Bottom Bar on Mobile */}
       {!isPaid && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-205 p-4 md:hidden shadow-lg animate-fade-in flex items-center justify-between">
+        <div
+          className="fixed bottom-0 left-0 right-0 z-50 bg-white/97 backdrop-blur-md border-t border-slate-200 shadow-lg animate-fade-in flex items-center justify-between px-4 pt-3"
+          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))' }}
+        >
           <div className="text-left">
-            <p className="text-[9px] text-slate-400 font-bold uppercase">Unlock Complete Report</p>
+            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide">Unlock Complete Report</p>
             <p className="font-heading text-base font-extrabold text-slate-900">₹499</p>
           </div>
           <Button
             onClick={() => setIsUpgradeModalOpen(true)}
-            className="rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2 shadow-md shadow-blue-500/10 flex items-center gap-1.5 animate-pulse"
+            className="rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 shadow-md shadow-blue-500/20 flex items-center gap-1.5"
           >
             Unlock Now <Lock className="h-3 w-3" />
           </Button>
         </div>
       )}
 
-      {/* Upgrade Purchase Modal */}
+      {/* Upgrade Purchase Modal — fixed, centered, ESC-closeable, body-scroll-locked */}
       {isUpgradeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in" onClick={(e) => { if (e.target === e.currentTarget) setIsUpgradeModalOpen(false); }}>
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget) closeUpgradeModal() }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Upgrade to Premium"
+        >
           <div
-            className="relative w-full max-w-md rounded-2xl border border-slate-250 bg-white p-6 shadow-xl z-50 animate-fade-in-up"
+            className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl z-[101] animate-fade-in-up flex flex-col"
+            style={{ maxHeight: '90vh' }}
           >
-            <button
-              type="button"
-              onClick={() => setIsUpgradeModalOpen(false)}
-              className="absolute right-4 top-4 rounded-md p-1 text-slate-400 hover:text-slate-650 transition"
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="text-center">
-              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 border border-blue-100 text-blue-600 mb-4 animate-bounce">
-                <Sparkles className="h-4.5 w-4.5" />
+            {/* Modal Header — sticky */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 border border-blue-100 text-blue-600">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-heading text-base font-bold text-slate-900 leading-tight">
+                    Unlock Premium Prediction
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    One-time payment · Instant access
+                  </p>
+                </div>
               </div>
-              <h3 className="font-heading text-lg font-bold text-slate-900 leading-tight">
-                Unlock Premium Prediction
-              </h3>
-              <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-                Unlock advanced search, filters, AI ranking and complete college predictions.
+              <button
+                type="button"
+                onClick={closeUpgradeModal}
+                className="rounded-lg p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                aria-label="Close modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body — scrollable on small screens */}
+            <div className="overflow-y-auto overscroll-contain px-5 py-4 flex-1">
+              <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                Unlock advanced search, filters, AI ranking and complete college list for your CAP round.
               </p>
 
-              <div className="mt-4 space-y-2.5 text-left bg-slate-50 border border-slate-105 rounded-xl p-4 text-xs font-semibold text-slate-700 shadow-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-semibold text-slate-700">
                 {[
                   "Search Any College",
                   "Search by Branch",
                   "Advanced Filters",
                   "Complete College List",
-                  "AI Ranking",
-                  "PDF Report",
-                  "CAP Guidance",
+                  "AI Ranking Engine",
+                  "PDF Report Download",
+                  "CAP Round Guidance",
                   "Vacant Seat Tracker",
                   "WhatsApp Expert Support",
                 ].map((feat) => (
-                  <div key={feat} className="flex items-center gap-2">
-                    <span className="text-[11px] text-blue-605 font-black">✓</span>
+                  <div key={feat} className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                    <span className="text-emerald-500 font-black text-sm shrink-0">✓</span>
                     <span>{feat}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-6 flex flex-col gap-2">
-                <Button
-                  onClick={handleCheckoutPay}
-                  disabled={isPaying}
-                  className="w-full rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-3 shadow-md shadow-blue-500/10 flex items-center justify-center gap-2"
-                >
-                  {isPaying ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Processing payment...
-                    </>
-                  ) : (
-                    "Pay ₹499 & Unlock Instantly"
-                  )}
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setIsUpgradeModalOpen(false)}
-                  className="text-xs font-semibold text-slate-400 hover:text-slate-650 py-1"
-                >
-                  Go Back
-                </button>
+              {/* Pricing */}
+              <div className="mt-5 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 p-4 text-center">
+                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Today Only</p>
+                <div className="flex items-baseline justify-center gap-2 mt-1">
+                  <span className="text-slate-400 text-xs line-through font-semibold">₹2,999</span>
+                  <span className="font-heading text-3xl font-extrabold text-blue-700">₹499</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">One-time · No subscription</p>
               </div>
+            </div>
+
+            {/* Modal Footer — sticky */}
+            <div className="px-5 pb-5 pt-3 border-t border-slate-100 shrink-0 flex flex-col gap-2">
+              <Button
+                onClick={handleCheckoutPay}
+                disabled={isPaying}
+                className="w-full rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm py-3 shadow-md shadow-blue-500/20 flex items-center justify-center gap-2"
+              >
+                {isPaying ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Processing payment...
+                  </>
+                ) : (
+                  "Pay ₹499 & Unlock Instantly"
+                )}
+              </Button>
+              <button
+                type="button"
+                onClick={closeUpgradeModal}
+                className="text-xs font-semibold text-slate-400 hover:text-slate-700 py-1 transition"
+              >
+                Maybe Later
+              </button>
             </div>
           </div>
         </div>

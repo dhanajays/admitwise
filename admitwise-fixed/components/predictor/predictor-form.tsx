@@ -614,7 +614,7 @@ export function PredictorForm({ options }: { options: Options }) {
         />
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[410px_1fr] relative z-10 animate-fade-in-up">
+      <div className="w-full min-w-0 overflow-x-hidden grid gap-6 xl:grid-cols-[380px_1fr] relative z-10 animate-fade-in-up">
         {/* Absolute glow backing */}
         <div className="glow-blob -left-20 top-20 h-[300px] w-[300px] bg-blue-500/5" />
 
@@ -1404,7 +1404,7 @@ export function PredictorForm({ options }: { options: Options }) {
           </button>
         </form>
 
-        <div id="results" className="scroll-mt-24">
+        <div id="results" className="scroll-mt-24 min-w-0 overflow-x-hidden">
           {results === null ? (
             <div className="glass-card flex h-full min-h-80 flex-col items-center justify-center rounded-2xl border border-slate-200 p-10 text-center relative overflow-hidden bg-white/80">
               <div className="pointer-events-none absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500/5 filter blur-2xl" />

@@ -55,7 +55,7 @@ export default async function PredictorPage() {
 
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="relative overflow-hidden border-b border-slate-200/50 bg-[#f8fafc] py-14">
+        <section className="relative overflow-hidden border-b border-slate-200/50 bg-[#f8fafc] py-10 sm:py-14">
           {/* Ambient glow */}
           <div className="pointer-events-none absolute left-0 top-0 h-[300px] w-[400px] rounded-full bg-blue-500/5 filter blur-[100px]" />
           <div className="pointer-events-none absolute right-0 bottom-0 h-[200px] w-[300px] rounded-full bg-indigo-500/4 filter blur-[80px]" />
@@ -98,7 +98,7 @@ export default async function PredictorPage() {
         </section>
 
         {/* Predictor Form */}
-        <section className="bg-white">
+        <section className="bg-white overflow-x-hidden">
           <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
             <PredictorForm options={options} />
           </div>
