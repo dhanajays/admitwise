@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, useEffect, useRef } from "react"
 import { useSession, signOut } from "next-auth/react"
+import { motion } from "framer-motion"
 import {
   Menu,
   X,
@@ -101,31 +102,46 @@ export function SiteHeader() {
         </Link>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden items-center gap-1.5 md:flex">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-300",
-                pathname === link.href
-                  ? "text-blue-600 bg-blue-50"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
+        <nav className="hidden items-center gap-1 md:flex">
+          {navLinks.map((link) => {
+            const isActive = pathname === link.href
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={cn(
+                  "relative rounded-full px-4 py-1.5 text-sm font-semibold transition-all duration-300",
+                  isActive ? "text-primary" : "text-slate-650 hover:text-slate-950 hover:bg-slate-50"
+                )}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="activeNavTab"
+                    className="absolute inset-0 bg-violet-50 rounded-full -z-10"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                {link.label}
+              </Link>
+            )
+          })}
           {status === "authenticated" && (
             <Link
               href="/dashboard"
               className={cn(
-                "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-300",
+                "relative flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-all duration-300",
                 pathname === "/dashboard"
-                  ? "text-blue-600 bg-blue-50"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
+                  ? "text-primary"
+                  : "text-slate-650 hover:text-slate-955 hover:bg-slate-55"
               )}
             >
+              {pathname === "/dashboard" && (
+                <motion.span
+                  layoutId="activeNavTab"
+                  className="absolute inset-0 bg-violet-50 rounded-full -z-10"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
               <LayoutDashboard className="h-3.5 w-3.5" />
               My Plan
             </Link>

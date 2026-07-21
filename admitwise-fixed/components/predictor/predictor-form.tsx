@@ -29,6 +29,7 @@ import {
 
 import { Results } from "./results"
 import { UpgradePopup } from "@/components/plans/upgrade-popup"
+import { LoadingSkeleton } from "./loading-skeleton"
 
 interface Options {
   exams: string[]
@@ -1405,10 +1406,12 @@ export function PredictorForm({ options }: { options: Options }) {
         </form>
 
         <div id="results" className="scroll-mt-24 min-w-0 overflow-x-hidden">
-          {results === null ? (
+          {isPending ? (
+            <LoadingSkeleton />
+          ) : results === null ? (
             <div className="glass-card flex h-full min-h-80 flex-col items-center justify-center rounded-2xl border border-slate-200 p-10 text-center relative overflow-hidden bg-white/80">
-              <div className="pointer-events-none absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500/5 filter blur-2xl" />
-              <Sparkles className="h-10 w-10 text-blue-600 relative z-10" />
+              <div className="pointer-events-none absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-500/5 filter blur-2xl" />
+              <Sparkles className="h-10 w-10 text-primary relative z-10 animate-pulse" />
               <h3 className="mt-5 font-heading text-lg font-bold text-slate-900 relative z-10">
                 Your predictions will appear here
               </h3>

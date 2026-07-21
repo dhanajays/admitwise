@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useMemo, useState, useEffect, useCallback } from "react"
+import { motion } from "framer-motion"
 import {
   Building2,
   GraduationCap,
@@ -66,13 +67,24 @@ function maskCollegeName(name: string): string {
 }
 
 // Memoized Card Component to prevent heavy re-renders on dropdown/select filters state update
+// Memoized Card Component to prevent heavy re-renders on dropdown/select filters state update
 const ResultCard = React.memo(function ResultCard({
   college,
 }: {
   college: PredictionResult
 }) {
   return (
-    <div className="glass-card w-full min-w-0 rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-md hover:border-blue-200 hover:shadow-lg transition duration-300 relative overflow-hidden bg-white/90">
+    <motion.div 
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 16 }}
+      whileHover={{ y: -3, scale: 1.005 }}
+      transition={{ type: "spring", stiffness: 350, damping: 25 }}
+      className="glass-card w-full min-w-0 rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-md hover:border-primary/20 hover:shadow-lg relative overflow-hidden bg-white/90 group cursor-default"
+    >
+      {/* Subtle border glow inside cards */}
+      <div className="absolute inset-0 border border-primary/0 group-hover:border-primary/5 rounded-2xl transition-all duration-300 pointer-events-none" />
+
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
         {/* Left: College info */}
         <div className="flex-1 min-w-0">
@@ -104,8 +116,8 @@ const ResultCard = React.memo(function ResultCard({
             )}
           </div>
 
-          <h3 className="mt-4 flex items-start gap-2.5 text-base sm:text-lg font-bold text-slate-900 leading-snug break-words">
-            <Building2 className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+          <h3 className="mt-4 flex items-start gap-2.5 text-base sm:text-lg font-bold text-slate-950 leading-snug break-words">
+            <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
             <span>{college.collegeName}</span>
           </h3>
 
@@ -189,20 +201,22 @@ const ResultCard = React.memo(function ResultCard({
           {/* Progress bar — always full width in the 2-col grid */}
           <div className="col-span-2">
             <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
-                style={{ width: `${college.chanceScore}%` }}
+              <motion.div
+                className="h-full bg-gradient-to-r from-primary to-accent rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${college.chanceScore}%` }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
               />
             </div>
           </div>
 
-          <div className="col-span-2 flex items-center gap-2 rounded-xl bg-blue-50 border border-blue-100 p-2.5">
-            <Trophy className="h-4 w-4 text-amber-500 shrink-0" />
+          <div className="col-span-2 flex items-center gap-2 rounded-xl bg-violet-50/50 border border-violet-100 p-2.5">
+            <Trophy className="h-4 w-4 text-amber-500 shrink-0 animate-bounce" />
             <span className="text-xs font-bold text-slate-800">{college.chance} Chance</span>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 })
 

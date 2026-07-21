@@ -105,21 +105,19 @@ export function PlanCard({ plan }: { plan: Plan }) {
     })
   }
 
-  // Calculate pricing discount details
   const isMultiRound = plan.id === "multi_round"
-
   return (
     <div
       className={cn(
         "h-full relative flex flex-col rounded-2xl p-7 shadow-md transition-all duration-500 bg-white",
         plan.highlight
-          ? "border-2 border-blue-600 shadow-xl shadow-blue-500/5 scale-[1.02] z-10"
+          ? "border-2 border-primary shadow-xl shadow-indigo-500/5 scale-[1.02] z-10 animate-pulse-subtle"
           : "glass-card glass-card-hover border-slate-200"
       )}
     >
       {/* Dynamic radial glow behind the highlighted card */}
       {plan.highlight && (
-        <div className="pointer-events-none absolute left-1/2 top-0 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500/5 filter blur-3xl" />
+        <div className="pointer-events-none absolute left-1/2 top-0 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 filter blur-3xl" />
       )}
 
       {/* Floating Badge */}
@@ -128,8 +126,8 @@ export function PlanCard({ plan }: { plan: Plan }) {
           className={cn(
             "absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider shadow-sm",
             plan.highlight
-              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white border border-blue-400/20"
-              : "bg-slate-100 text-slate-600 border border-slate-200"
+              ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white border border-violet-400/20"
+              : "bg-slate-100 text-slate-650 border border-slate-200"
           )}
         >
           {plan.badge}
@@ -138,9 +136,9 @@ export function PlanCard({ plan }: { plan: Plan }) {
 
       {/* Header */}
       <div className="mb-4">
-        <h3 className="font-heading text-lg font-bold text-slate-900 flex items-center gap-2">
+        <h3 className="font-heading text-lg font-bold text-slate-905 flex items-center gap-2">
           {plan.name}
-          {plan.highlight && <Sparkles className="h-4 w-4 text-blue-650" />}
+          {plan.highlight && <Sparkles className="h-4 w-4 text-primary" />}
         </h3>
         <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">{plan.description}</p>
       </div>
@@ -148,7 +146,7 @@ export function PlanCard({ plan }: { plan: Plan }) {
       {/* Price */}
       <div className="mb-6 flex flex-col gap-1">
         <div className="flex items-baseline gap-1.5">
-          <span className="font-heading text-4xl font-extrabold text-slate-900">
+          <span className="font-heading text-4xl font-extrabold text-slate-905">
             {formatINR(plan.price)}
           </span>
           <span className="text-xs text-slate-400 font-medium">one-time</span>
@@ -166,7 +164,7 @@ export function PlanCard({ plan }: { plan: Plan }) {
       <ul className="mb-8 flex-1 space-y-3 border-t border-slate-100 pt-5">
         {plan.features.map((feature) => (
           <li key={feature} className="flex items-start gap-2.5 text-xs leading-relaxed">
-            <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-blue-50 border border-blue-100 text-blue-600 shadow-sm">
+            <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-violet-50 border border-violet-100 text-primary shadow-sm">
               <Check className="h-3 w-3" />
             </span>
             <span className="text-slate-600">{feature}</span>
@@ -176,7 +174,7 @@ export function PlanCard({ plan }: { plan: Plan }) {
 
       {/* CTA Button */}
       {purchased ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 border border-emerald-100 py-2.5 text-xs font-semibold text-emerald-600">
+        <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 border border-emerald-100 py-2.5 text-xs font-semibold text-emerald-600 animate-bounce">
           <Check className="h-4 w-4" />
           Plan Activated!
         </div>
