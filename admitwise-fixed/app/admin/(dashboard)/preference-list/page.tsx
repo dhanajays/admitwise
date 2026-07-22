@@ -139,6 +139,12 @@ export default function AdminPreferenceDatasetPage() {
         const responseText = xhr.responseText || ""
         if (xhr.status === 413 || responseText.includes("Request Entity Too Large")) {
           setErrorMsg("Dataset file is too large for the server. Maximum allowed file size is 30 MB.")
+        } else if (xhr.status === 401 || xhr.status === 403) {
+          setErrorMsg("Unauthorized access. Please log in to your admin account again.")
+        } else if (xhr.status === 400) {
+          setErrorMsg("Invalid CSV format or missing required columns.")
+        } else if (xhr.status === 500) {
+          setErrorMsg("Server processing error during database import. Please try again.")
         } else {
           setErrorMsg("Server temporarily unavailable. Please try again later.")
         }

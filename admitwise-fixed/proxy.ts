@@ -94,8 +94,9 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico, icons, public assets
      * - /api/auth (NextAuth routes — must always be public)
-     * - /api/auth/admin (admin auth routes)
+     * - /api/admin/preference-dataset (large streaming dataset upload API)
      */
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|api/auth).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|api/auth|api/admin/preference-dataset).*)",
   ],
 }
+

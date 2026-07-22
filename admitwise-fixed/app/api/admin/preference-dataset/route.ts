@@ -5,8 +5,10 @@ import Papa from "papaparse"
 import fs from "fs"
 import path from "path"
 import os from "os"
+import Busboy from "busboy"
+import { Readable } from "stream"
 
-export const maxDuration = 300 // 5 minutes timeout for large datasets
+export const maxDuration = 300 // 5 minutes execution timeout for large datasets
 export const dynamic = "force-dynamic"
 
 const MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024 // 30 MB = 31,457,280 bytes
@@ -29,85 +31,93 @@ const REQUIRED_COLUMNS = [
   "city",
 ]
 
-interface ParsedMultipart {
+interface StreamedUploadResult {
   round: string
   fileName: string
   fileSize: number
-  fileContent: string
+  tmpFilePath: string
 }
 
-async function parseMultipartForm(req: Request): Promise<ParsedMultipart> {
+function normalizeCapRound(input: string): string {
+  const clean = input.trim().toLowerCase()
+  if (clean.includes("2") || clean === "2") return "Round 2"
+  if (clean.includes("3") || clean === "3") return "Round 3"
+  if (clean.includes("4") || clean === "4") return "Round 4"
+  return "Round 1"
+}
+
+async function streamMultipartToDisk(req: Request): Promise<StreamedUploadResult> {
   const contentType = req.headers.get("content-type") || ""
 
-  // 1. Try standard req.formData() first
-  try {
-    const formData = await req.formData()
-    const file = formData.get("file") as File | null
-    const round = ((formData.get("round") as string) || "Round 1").trim()
-
-    if (file) {
-      const fileContent = await file.text()
-      return {
-        round,
-        fileName: file.name || "uploaded.csv",
-        fileSize: file.size,
-        fileContent,
-      }
-    }
-  } catch (err: any) {
-    console.log("ℹ️ [Preference Dataset Upload] req.formData() size limit hit or parse error:", err?.message || err)
+  // Fallback if not multipart
+  if (!contentType.includes("multipart/form-data")) {
+    throw new Error("Invalid request header: Content-Type must be multipart/form-data")
   }
 
-  // 2. Fallback: Parse raw buffer directly from req.arrayBuffer()
-  const arrayBuf = await req.arrayBuffer()
-  const buffer = Buffer.from(arrayBuf)
-
-  const match = contentType.match(/boundary=([^;]+)/i)
-  if (!match) {
-    throw new Error("Invalid multipart Content-Type header (boundary missing)")
-  }
-
-  const rawBoundary = match[1].replace(/^["']|["']$/g, "").trim()
-  const boundary = `--${rawBoundary}`
-  const textContent = buffer.toString("utf-8")
-  const parts = textContent.split(boundary)
+  const tmpFileName = `pref_ds_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.csv`
+  const tmpFilePath = path.join(os.tmpdir(), tmpFileName)
+  const writeStream = fs.createWriteStream(tmpFilePath)
 
   let round = "Round 1"
   let fileName = "uploaded.csv"
-  let fileContent = ""
   let fileSize = 0
 
-  for (const part of parts) {
-    if (!part || part === "--\r\n" || part === "--") continue
+  return new Promise((resolve, reject) => {
+    try {
+      const busboy = Busboy({
+        headers: { "content-type": contentType },
+        limits: { fileSize: 50 * 1024 * 1024 }, // 50MB internal buffer limit
+      })
 
-    const headerEndIndex = part.indexOf("\r\n\r\n")
-    if (headerEndIndex === -1) continue
+      busboy.on("field", (fieldname, val) => {
+        if (fieldname === "round") {
+          round = val ? normalizeCapRound(val) : "Round 1"
+        }
+      })
 
-    const headers = part.substring(0, headerEndIndex)
-    let body = part.substring(headerEndIndex + 4)
+      busboy.on("file", (fieldname, fileStream, info) => {
+        fileName = info.filename || "uploaded.csv"
 
-    if (body.endsWith("\r\n")) {
-      body = body.substring(0, body.length - 2)
-    }
+        fileStream.on("data", (chunk) => {
+          fileSize += chunk.length
+        })
 
-    if (headers.includes('name="round"')) {
-      round = body.trim() || "Round 1"
-    } else if (headers.includes('name="file"')) {
-      const nameMatch = headers.match(/filename=["']?([^"'\r\n]+)["']?/i)
-      if (nameMatch) {
-        fileName = nameMatch[1]
+        fileStream.pipe(writeStream)
+      })
+
+      busboy.on("finish", () => {
+        writeStream.end()
+        resolve({
+          round,
+          fileName,
+          fileSize,
+          tmpFilePath,
+        })
+      })
+
+      busboy.on("error", (err: any) => {
+        writeStream.end()
+        if (fs.existsSync(tmpFilePath)) {
+          try { fs.unlinkSync(tmpFilePath) } catch (e) {}
+        }
+        reject(err)
+      })
+
+      if (!req.body) {
+        reject(new Error("Request body is empty"))
+        return
       }
-      fileContent = body
-      fileSize = Buffer.byteLength(body, "utf-8")
-    }
-  }
 
-  return {
-    round,
-    fileName,
-    fileSize,
-    fileContent,
-  }
+      // Convert Web ReadableStream to Node.js Readable stream
+      const nodeStream = Readable.fromWeb(req.body as any)
+      nodeStream.pipe(busboy)
+    } catch (err) {
+      if (fs.existsSync(tmpFilePath)) {
+        try { fs.unlinkSync(tmpFilePath) } catch (e) {}
+      }
+      reject(err)
+    }
+  })
 }
 
 async function checkAdminRole() {
@@ -170,8 +180,13 @@ export async function POST(req: Request) {
     const contentLengthStr = req.headers.get("content-length") || "0"
     const requestSizeBytes = parseInt(contentLengthStr, 10)
 
-    // Parse multipart upload
-    const { round, fileName, fileSize, fileContent } = await parseMultipartForm(req)
+    // Stream multipart file upload to temp disk file via Busboy
+    const streamed = await streamMultipartToDisk(req)
+    tmpFilePath = streamed.tmpFilePath
+
+    const round = streamed.round
+    const fileName = streamed.fileName
+    const fileSize = streamed.fileSize
     const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2)
 
     console.log(`File Name: ${fileName}`)
@@ -179,30 +194,32 @@ export async function POST(req: Request) {
     console.log(`Content Type: ${contentType}`)
     console.log(`Request Size: ${requestSizeBytes} bytes`)
 
-    if (!fileContent || fileContent.trim().length === 0) {
+    if (fileSize === 0) {
+      if (tmpFilePath && fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath)
       return NextResponse.json({ success: false, error: "CSV file is empty" }, { status: 400 })
     }
 
     // Verify exact byte size limit (30 MB = 31,457,280 bytes)
     if (fileSize > MAX_FILE_SIZE_BYTES) {
       console.warn(`⚠️ [Preference Dataset Upload] File size ${fileSizeMB} MB exceeds 30 MB limit`)
+      if (tmpFilePath && fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath)
       return NextResponse.json(
         {
           success: false,
-          error: `CSV exceeds 30 MB limit (${fileSizeMB} MB).`,
+          error: `Dataset exceeds 30 MB limit (${fileSizeMB} MB).`,
         },
         { status: 400 }
       )
     }
 
-    // Save temporary file to disk (os.tmpdir()) for disk-based parsing
-    const tmpFileName = `pref_ds_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.csv`
-    tmpFilePath = path.join(os.tmpdir(), tmpFileName)
-    fs.writeFileSync(tmpFilePath, fileContent, "utf-8")
-    console.log(`[Preference Dataset Upload] Saved temp file: ${tmpFilePath}`)
-
     // Step 1: Validate Header Columns
-    const firstLine = fileContent.split(/\r?\n/)[0] || ""
+    console.log("[Preference Dataset Upload] Validation Started: Header check")
+    const fileHeaderBuffer = Buffer.alloc(4096)
+    const fd = fs.openSync(tmpFilePath, "r")
+    fs.readSync(fd, fileHeaderBuffer, 0, 4096, 0)
+    fs.closeSync(fd)
+
+    const firstLine = fileHeaderBuffer.toString("utf-8").split(/\r?\n/)[0] || ""
     const headerCols = firstLine
       .split(",")
       .map((c) => c.trim().replace(/^["']|["']$/g, "").toLowerCase())
@@ -219,9 +236,7 @@ export async function POST(req: Request) {
       if (!hasCol) {
         console.warn(`⚠️ [Preference Dataset Upload] Missing required column: ${requiredCol}`)
         if (tmpFilePath && fs.existsSync(tmpFilePath)) {
-          try {
-            fs.unlinkSync(tmpFilePath)
-          } catch (e) {}
+          try { fs.unlinkSync(tmpFilePath) } catch (e) {}
         }
         return NextResponse.json(
           {
@@ -233,10 +248,10 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log("✅ [Preference Dataset Upload] Validation: Header check passed")
-    console.log("⚙️ [Preference Dataset Upload] Parser Started")
+    console.log("✅ [Preference Dataset Upload] Validation Completed: Header check passed")
+    console.log("⚙️ [Preference Dataset Upload] CSV Stream Parsing Started...")
 
-    // Parse CSV from temporary file disk stream
+    // Parse CSV from disk file stream using PapaParse
     const fileStream = fs.createReadStream(tmpFilePath, { encoding: "utf-8" })
     const parsedData: any[] = await new Promise((resolve, reject) => {
       Papa.parse(fileStream, {
@@ -249,16 +264,25 @@ export async function POST(req: Request) {
     })
 
     const rowsParsed = parsedData.length
-    console.log(`[Preference Dataset Upload] Rows Parsed: ${rowsParsed}`)
+    console.log(`[Preference Dataset Upload] CSV Parsed: ${rowsParsed} rows`)
 
     if (rowsParsed === 0) {
       if (tmpFilePath && fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath)
-      return NextResponse.json({ success: false, error: "No data rows found in CSV" }, { status: 400 })
+      return NextResponse.json({ success: false, error: "No data rows found in CSV file" }, { status: 400 })
     }
 
     const roundNumber = parseInt(round.replace(/\D/g, ""), 10) || 1
 
-    // Step: Archive existing active dataset for this round
+    // Step 2: Resolve or verify user ID
+    let uploadedUserId = adminSession.userId
+    const userRecord = await db.user.findFirst({
+      where: { OR: [{ id: uploadedUserId }, { email: adminSession.email }] },
+    })
+    if (userRecord) {
+      uploadedUserId = userRecord.id
+    }
+
+    // Step 3: Archive previous active dataset for this CAP Round
     const existingActive = await db.preferenceGeneratorDataset.findFirst({
       where: { round, status: "Active" },
     })
@@ -266,36 +290,38 @@ export async function POST(req: Request) {
     const newVersion = existingActive ? existingActive.version + 1 : 1
 
     if (existingActive) {
-      console.log(`[Preference Dataset Upload] Deactivating existing dataset ID ${existingActive.id} (v${existingActive.version})`)
+      console.log(`[Preference Dataset Upload] Archiving active dataset ID ${existingActive.id} (v${existingActive.version})`)
       await db.preferenceGeneratorDataset.update({
         where: { id: existingActive.id },
         data: { status: "Inactive" },
       })
     }
 
-    // Step: Create new active dataset record
+    // Step 4: Create new active dataset record
     const dataset = await db.preferenceGeneratorDataset.create({
       data: {
         exam: "MHT CET PCM",
         round,
-        uploadedByUserId: adminSession.userId,
+        uploadedByUserId: uploadedUserId,
         status: "Active",
         rowCount: rowsParsed,
         version: newVersion,
       },
     })
 
-    // Create dataset version record
+    // Save Dataset Version Log
     await db.preferenceDatasetVersion.create({
       data: {
         datasetId: dataset.id,
         version: newVersion,
         rowCount: rowsParsed,
-        uploadedByUserId: adminSession.userId,
+        uploadedByUserId: uploadedUserId,
       },
     })
 
-    // Map CSV rows into database cutoffs
+    console.log(`[Preference Dataset Upload] Dataset Activated: ${round} (v${newVersion}) ID: ${dataset.id}`)
+
+    // Step 5: Map CSV data into database cutoff objects
     const cutoffRows: any[] = []
     for (let idx = 0; idx < parsedData.length; idx++) {
       const row = parsedData[idx]
@@ -340,7 +366,7 @@ export async function POST(req: Request) {
       })
     }
 
-    // Batch insert cutoffs in chunks of 2,000
+    // Step 6: Batch insert cutoffs in chunks of 2,000
     const chunkSize = 2000
     let insertedCount = 0
 
@@ -353,21 +379,21 @@ export async function POST(req: Request) {
     }
 
     console.log(`[Preference Dataset Upload] Rows Imported: ${insertedCount}`)
+    console.log(`[Preference Dataset Upload] Upload History Saved`)
     console.log(`🎉 [Preference Dataset Upload] Upload Completed in ${(Date.now() - startTime)}ms`)
     console.log("=======================================================\n")
 
     // Delete temp file from disk
     if (tmpFilePath && fs.existsSync(tmpFilePath)) {
-      try {
-        fs.unlinkSync(tmpFilePath)
-      } catch (e) {}
+      try { fs.unlinkSync(tmpFilePath) } catch (e) {}
     }
 
     return NextResponse.json({
       success: true,
+      message: `${round} dataset uploaded successfully.`,
       rowsImported: insertedCount,
       round: roundNumber,
-      message: `${round} dataset uploaded successfully.`,
+      datasetVersion: newVersion,
       dataset: {
         id: dataset.id,
         round: dataset.round,
@@ -380,21 +406,19 @@ export async function POST(req: Request) {
     console.error("❌ [Preference Dataset Upload Fatal Error]:", error?.stack || error)
 
     if (tmpFilePath && fs.existsSync(tmpFilePath)) {
-      try {
-        fs.unlinkSync(tmpFilePath)
-      } catch (e) {}
+      try { fs.unlinkSync(tmpFilePath) } catch (e) {}
     }
 
     return NextResponse.json(
       {
         success: false,
         error: error.message || "Upload failed due to a server processing error. Please try again.",
+        details: error?.stack || null,
       },
       { status: 500 }
     )
   }
 }
-
 
 export async function DELETE(req: Request) {
   try {
@@ -424,4 +448,3 @@ export async function DELETE(req: Request) {
     )
   }
 }
-
