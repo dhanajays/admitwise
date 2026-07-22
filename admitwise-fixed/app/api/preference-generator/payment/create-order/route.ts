@@ -27,15 +27,22 @@ export async function POST(req: Request) {
     const userId = session.user.id
     const amount = 599 // ₹599
 
-    // Check if already purchased
-    const existing = await db.preferenceGeneratorPurchase.findUnique({
-      where: {
-        userId_round: {
-          userId,
-          round,
-        },
-      },
-    })
+    // Safely check if already purchased (missing purchase is NOT an error)
+    let existing = null
+    if (db && (db as any).preferenceGeneratorPurchase) {
+      try {
+        existing = await db.preferenceGeneratorPurchase.findUnique({
+          where: {
+            userId_round: {
+              userId,
+              round,
+            },
+          },
+        })
+      } catch (err) {
+        console.warn("No existing purchase found or purchase check skipped:", err)
+      }
+    }
 
     if (existing && existing.status === "Paid") {
       return NextResponse.json(
