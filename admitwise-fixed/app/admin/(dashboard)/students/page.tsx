@@ -15,6 +15,7 @@ import {
   Loader2,
   CheckCircle,
   ClipboardList,
+  Sparkles,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,13 +41,17 @@ export default function StudentManagerPage() {
   const [detailsLoading, setDetailsLoading] = useState(false)
 
   // Modals state
-  const [modalType, setModalType] = useState<"suspend" | "plan" | "limit" | "password" | "delete" | null>(null)
+  const [modalType, setModalType] = useState<"suspend" | "plan" | "limit" | "password" | "delete" | "preference_grant" | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   
   // Form values
   const [newPlan, setNewPlan] = useState("single")
   const [newLimit, setNewLimit] = useState(1)
   const [newPassword, setNewPassword] = useState("")
+  const [prefAccessType, setPrefAccessType] = useState("Preference List Generator (₹599)")
+  const [prefRound, setPrefRound] = useState("Round 1")
+  const [prefStatus, setPrefStatus] = useState("Active")
+  const [prefExpiry, setPrefExpiry] = useState("Never Expires")
 
   useEffect(() => {
     fetchStudents()
@@ -105,6 +110,11 @@ export default function StudentManagerPage() {
       } else if (modalType === "password") {
         body.action = "reset_password"
         body.password = newPassword
+      } else if (modalType === "preference_grant") {
+        body.action = "grant_preference_access"
+        body.round = prefRound
+        body.accessStatus = prefStatus === "Active" && prefAccessType !== "No Access" ? "Active" : "No Access"
+        body.percentile = 95
       } else if (modalType === "delete") {
         // Delete request uses DELETE method
         const res = await fetch(`/api/admin/users?userId=${selectedStudent.id}`, {
@@ -231,20 +241,21 @@ export default function StudentManagerPage() {
                   <th className="px-6 py-3 font-semibold">Phone Number</th>
                   <th className="px-6 py-3 font-semibold">Authentication Provider</th>
                   <th className="px-6 py-3 font-semibold">Registration Date</th>
-                  <th className="px-6 py-3 font-semibold">Plan</th>
+                  <th className="px-6 py-3 font-semibold">Predictor Plan</th>
+                  <th className="px-6 py-3 font-semibold">Preference List</th>
                   <th className="px-6 py-3 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-20 text-center">
+                    <td colSpan={8} className="py-20 text-center">
                       <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                     </td>
                   </tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-muted-foreground">No students matched.</td>
+                    <td colSpan={8} className="py-12 text-center text-muted-foreground">No students matched.</td>
                   </tr>
                 ) : (
                   filteredStudents.map((student) => (
@@ -272,6 +283,17 @@ export default function StudentManagerPage() {
                       </td>
                       <td className="px-6 py-3.5 font-medium uppercase text-xs text-foreground">
                         {student.currentPlan}
+                      </td>
+                      <td className="px-6 py-3.5 text-xs font-semibold">
+                        {student.hasPreferenceAccess ? (
+                          <span className="rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xxs font-bold text-indigo-700">
+                            ₹599 Active
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-xxs font-medium">
+                            Not Purchased
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-3.5">
                         <span
@@ -378,6 +400,17 @@ export default function StudentManagerPage() {
                   className="flex items-center gap-1.5 justify-start text-left"
                 >
                   <KeyRound className="h-4 w-4 text-yellow-600" /> Reset Pass
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setModalType("preference_grant")
+                  }}
+                  className="col-span-2 flex items-center gap-1.5 justify-center bg-indigo-50/80 border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-semibold"
+                >
+                  <Sparkles className="h-4 w-4 text-indigo-600" /> Grant Preference List Access
                 </Button>
 
                 <Button
@@ -519,6 +552,7 @@ export default function StudentManagerPage() {
               {modalType === "limit" && "Set Saved Profiles Limit"}
               {modalType === "password" && "Reset Student Credentials"}
               {modalType === "delete" && "Permanently Delete Student"}
+              {modalType === "preference_grant" && "Preference List Generator Access"}
             </h3>
 
             <p className="text-sm text-muted-foreground">
@@ -528,21 +562,25 @@ export default function StudentManagerPage() {
                 }?`}
               {modalType === "delete" &&
                 `WARNING: Deleting this account will permanently erase all subscription ledgers, prediction profiles, and prediction history files. This action is irreversible.`}
+              {modalType === "preference_grant" &&
+                `Configure Preference List Generator (₹599) access for ${selectedStudent.name || selectedStudent.email}.`}
             </p>
 
             {modalType === "plan" && (
               <div className="space-y-1.5">
-                <Label>Select Subscription Plan</Label>
+                <Label>Select Subscription Plan (Predictor only)</Label>
                 <Select value={newPlan} onValueChange={(value) => value && setNewPlan(value)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single">Single Predictor (₹499 - 1 slot)</SelectItem>
-                    <SelectItem value="premium">Premium CAP Support (₹5000 - 3 slots)</SelectItem>
-                    <SelectItem value="elite">Elite Admission Support (₹6000 - 4 slots)</SelectItem>
+                    <SelectItem value="single">Single Predictor (₹499 – 1 slot)</SelectItem>
+                    <SelectItem value="multi_round">Multi-Round (₹1800 – 2 slots)</SelectItem>
+                    <SelectItem value="premium">Premium CAP Support (₹5000 – 3 slots)</SelectItem>
+                    <SelectItem value="elite">Elite Admission Support (₹6000 – 4 slots)</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xxs text-muted-foreground pt-1">Preference List Generator (₹599) is managed separately via "Grant Preference List Access".</p>
               </div>
             )}
 
@@ -570,6 +608,73 @@ export default function StudentManagerPage() {
               </div>
             )}
 
+            {/* Preference Grant Modal Fields */}
+            {modalType === "preference_grant" && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Access Type</Label>
+                  <Select value={prefAccessType} onValueChange={setPrefAccessType}>
+                    <SelectTrigger className="text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Preference List Generator (₹599)">Preference List Generator (₹599)</SelectItem>
+                      <SelectItem value="No Access">No Access (Revoke)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">CAP Round</Label>
+                  <Select value={prefRound} onValueChange={setPrefRound}>
+                    <SelectTrigger className="text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Round 1">Round 1</SelectItem>
+                      <SelectItem value="Round 2">Round 2</SelectItem>
+                      <SelectItem value="Round 3">Round 3</SelectItem>
+                      <SelectItem value="Round 4">Round 4</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Access Status</Label>
+                  <Select value={prefStatus} onValueChange={setPrefStatus}>
+                    <SelectTrigger className="text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Expired">Expired</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Expiry</Label>
+                  <Select value={prefExpiry} onValueChange={setPrefExpiry}>
+                    <SelectTrigger className="text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Never Expires">Never Expires</SelectItem>
+                      <SelectItem value="30 Days">30 Days</SelectItem>
+                      <SelectItem value="90 Days">90 Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {prefAccessType !== "No Access" && (
+                  <div className="rounded-lg bg-indigo-50/60 border border-indigo-100 p-2.5 text-xs text-indigo-700">
+                    <p className="font-semibold">Admin Grant (Manual)</p>
+                    <p className="text-xxs text-indigo-500 mt-0.5">No Razorpay payment required. Recorded as manual admin grant.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Buttons */}
             <div className="flex gap-3 pt-2">
               <Button
@@ -583,7 +688,7 @@ export default function StudentManagerPage() {
               <Button
                 disabled={actionLoading}
                 onClick={handleExecuteAction}
-                className={`flex-1 ${modalType === "delete" ? "bg-red-600 text-white hover:bg-red-700" : ""}`}
+                className={`flex-1 ${modalType === "delete" ? "bg-red-600 text-white hover:bg-red-700" : modalType === "preference_grant" ? "bg-indigo-600 text-white hover:bg-indigo-700" : ""}`}
               >
                 {actionLoading ? (
                   <>
@@ -591,6 +696,8 @@ export default function StudentManagerPage() {
                   </>
                 ) : modalType === "delete" ? (
                   "Confirm Delete"
+                ) : modalType === "preference_grant" ? (
+                  "Save Access"
                 ) : (
                   "Confirm"
                 )}

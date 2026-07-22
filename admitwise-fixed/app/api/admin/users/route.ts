@@ -55,6 +55,7 @@ export async function GET(req: Request) {
       include: {
         role: true,
         predictionProfiles: true,
+        preferenceGeneratorPurchases: true,
       },
     })
 
@@ -72,6 +73,8 @@ export async function GET(req: Request) {
       profilesUsed: u.profilesUsed,
       isSuspended: u.isSuspended,
       role: u.role?.name || "Student",
+      hasPreferenceAccess: u.currentPlan === "premium" || u.currentPlan === "elite" || u.preferenceGeneratorPurchases.some((p) => p.status === "Paid"),
+      preferencePurchases: u.preferenceGeneratorPurchases.filter((p) => p.status === "Paid"),
     }))
 
     return NextResponse.json(formatted)
@@ -216,6 +219,52 @@ export async function POST(req: Request) {
       })
 
       return NextResponse.json({ success: true, message: "Password reset successfully" })
+    }
+
+    // ── 5. Grant / Revoke Preference List Generator Access ───────────────────
+    if (action === "grant_preference_access") {
+      const { round = "Round 1", accessStatus = "Active", percentile = 95 } = body
+
+      if (accessStatus === "No Access" || accessStatus === "Expired") {
+        await db.preferenceGeneratorPurchase.updateMany({
+          where: { userId, round },
+          data: { status: "Expired" },
+        })
+        return NextResponse.json({ success: true, message: `Preference list access revoked for ${round}` })
+      }
+
+      await db.preferenceGeneratorPurchase.upsert({
+        where: {
+          userId_round: {
+            userId,
+            round,
+          },
+        },
+        update: {
+          status: "Paid",
+          savedPercentile: percentile,
+          amount: 599,
+          paymentId: "admin_manual",
+        },
+        create: {
+          userId,
+          round,
+          savedPercentile: percentile,
+          status: "Paid",
+          amount: 599,
+          paymentId: "admin_manual",
+        },
+      })
+
+      await db.activityLog.create({
+        data: {
+          userId: session.userId,
+          action: "ADMIN_PREFERENCE_GRANT",
+          details: `Manually granted Preference List Generator access to user ${user.email} for ${round}`,
+        },
+      })
+
+      return NextResponse.json({ success: true, message: `Granted Preference List access for ${round}` })
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
