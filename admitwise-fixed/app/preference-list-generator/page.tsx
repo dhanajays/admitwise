@@ -50,7 +50,33 @@ export default function PreferenceListGeneratorPage() {
   const [downloading, setDownloading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // 1. Fetch Dynamic Branches & Cities for selected CAP Round
+  // 1. Restore Form Draft after Login / Sign Up
+  useEffect(() => {
+    try {
+      const savedDraftStr =
+        sessionStorage.getItem("preferenceGeneratorDraft") ||
+        localStorage.getItem("preferenceGeneratorDraft")
+
+      if (savedDraftStr) {
+        const draft = JSON.parse(savedDraftStr)
+        sessionStorage.removeItem("preferenceGeneratorDraft")
+        localStorage.removeItem("preferenceGeneratorDraft")
+
+        if (draft.percentile) setPercentile(String(draft.percentile))
+        if (draft.round) setCapRound(draft.round)
+        if (draft.preferredBranches && Array.isArray(draft.preferredBranches) && draft.preferredBranches.length > 0) {
+          setPreferredBranches(draft.preferredBranches)
+        }
+        if (draft.preferredCities && Array.isArray(draft.preferredCities) && draft.preferredCities.length > 0) {
+          setPreferredCities(draft.preferredCities)
+        }
+      }
+    } catch (e) {
+      console.error("Error restoring preference generator draft:", e)
+    }
+  }, [])
+
+  // 2. Fetch Dynamic Branches & Cities for selected CAP Round
   useEffect(() => {
     async function fetchOptions() {
       setLoadingOptions(true)
@@ -86,7 +112,7 @@ export default function PreferenceListGeneratorPage() {
     fetchOptions()
   }, [capRound])
 
-  // 2. Check Purchase status whenever session or capRound changes
+  // 3. Check Purchase status whenever session or capRound changes
   useEffect(() => {
     async function checkPurchase() {
       try {
@@ -110,7 +136,7 @@ export default function PreferenceListGeneratorPage() {
     checkPurchase()
   }, [session, capRound])
 
-  // 3. Handle Generate Preference List
+  // 4. Handle Generate Preference List
   const handleGenerate = async (overridePercentile?: number) => {
     setErrorMsg(null)
     const targetPercentile = overridePercentile ?? parseFloat(percentile)
@@ -122,6 +148,26 @@ export default function PreferenceListGeneratorPage() {
 
     if (preferredBranches.length === 0) {
       setErrorMsg("Please select at least one preferred branch priority.")
+      return
+    }
+
+    // Guest Authentication Flow: Save form draft & redirect to login if not logged in
+    if (!session || !session.user) {
+      const draft = {
+        exam: "MHT CET PCM",
+        percentile: String(targetPercentile),
+        round: capRound,
+        preferredBranches,
+        preferredCities,
+      }
+      try {
+        sessionStorage.setItem("preferenceGeneratorDraft", JSON.stringify(draft))
+        localStorage.setItem("preferenceGeneratorDraft", JSON.stringify(draft))
+      } catch (e) {
+        console.error("Error saving draft to storage:", e)
+      }
+
+      window.location.href = `/login?callbackUrl=${encodeURIComponent("/preference-list-generator")}`
       return
     }
 

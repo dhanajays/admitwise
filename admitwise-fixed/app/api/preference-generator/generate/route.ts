@@ -31,20 +31,27 @@ export async function POST(req: Request) {
     let savedPercentile: number | undefined = undefined
 
     if (session && session.user) {
-      const purchase = await db.preferenceGeneratorPurchase.findUnique({
-        where: {
-          userId_round: {
-            userId: session.user.id,
-            round,
-          },
-        },
-      })
+      try {
+        if (db && (db as any).preferenceGeneratorPurchase) {
+          const purchase = await db.preferenceGeneratorPurchase.findUnique({
+            where: {
+              userId_round: {
+                userId: session.user.id,
+                round,
+              },
+            },
+          })
 
-      if (purchase && purchase.status === "Paid") {
-        isPaid = true
-        savedPercentile = purchase.savedPercentile
-        // Override input percentile with saved locked percentile once paid
-        percentile = purchase.savedPercentile
+          if (purchase && purchase.status === "Paid") {
+            isPaid = true
+            savedPercentile = purchase.savedPercentile
+            // Override input percentile with saved locked percentile once paid
+            percentile = purchase.savedPercentile
+          }
+        }
+      } catch (e) {
+        console.error("Error looking up purchase record in generate API:", e)
+        isPaid = false
       }
     }
 
