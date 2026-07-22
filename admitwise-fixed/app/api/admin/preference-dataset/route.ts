@@ -11,8 +11,6 @@ import { Readable } from "stream"
 export const maxDuration = 300 // 5 minutes execution timeout for large datasets
 export const dynamic = "force-dynamic"
 
-const MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024 // 30 MB = 31,457,280 bytes
-
 const REQUIRED_COLUMNS = [
   "college_code",
   "college_name",
@@ -66,7 +64,6 @@ async function streamMultipartToDisk(req: Request): Promise<StreamedUploadResult
     try {
       const busboy = Busboy({
         headers: { "content-type": contentType },
-        limits: { fileSize: 50 * 1024 * 1024 }, // 50MB internal buffer limit
       })
 
       busboy.on("field", (fieldname, val) => {
@@ -198,19 +195,6 @@ export async function POST(req: Request) {
     if (fileSize === 0) {
       if (tmpFilePath && fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath)
       return NextResponse.json({ success: false, error: "CSV file is empty" }, { status: 400 })
-    }
-
-    // Verify exact byte size limit (30 MB = 31,457,280 bytes)
-    if (fileSize > MAX_FILE_SIZE_BYTES) {
-      console.warn(`⚠️ [Preference Dataset Upload] File size ${fileSizeMB} MB exceeds 30 MB limit`)
-      if (tmpFilePath && fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath)
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Dataset exceeds 30 MB limit (${fileSizeMB} MB).`,
-        },
-        { status: 400 }
-      )
     }
 
     // Step 1: Validate Header Columns
@@ -367,8 +351,8 @@ export async function POST(req: Request) {
       })
     }
 
-    // Step 6: Batch insert cutoffs in chunks of 2,000
-    const chunkSize = 2000
+    // Step 6: Batch insert cutoffs in chunks of 5,000
+    const chunkSize = 5000
     let insertedCount = 0
 
     for (let i = 0; i < cutoffRows.length; i += chunkSize) {
