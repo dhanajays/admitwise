@@ -59,11 +59,14 @@ export default function AdminPreferenceDatasetPage() {
   )
   const roundHistory = datasets.filter((d) => d.round === activeTab)
 
+  const MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024 // 30 MB = 31,457,280 bytes
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
-      if (file.size > 35 * 1024 * 1024) {
-        setErrorMsg("Dataset file exceeds 30 MB. Please reduce file size or split dataset.")
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
+        setErrorMsg(`CSV exceeds 30 MB limit (${sizeMB} MB). Please reduce file size or split dataset.`)
         setSelectedFile(null)
         return
       }
@@ -118,9 +121,11 @@ export default function AdminPreferenceDatasetPage() {
         try {
           const data = JSON.parse(xhr.responseText)
           if (data.success) {
+            const rowsCount = (data.rowsImported || data.rows || 0).toLocaleString()
             setSuccessMsg(
-              data.message ||
-                `Dataset uploaded successfully. ${data.rows?.toLocaleString() || ""} records imported. ${activeTab} dataset is now active.`
+              data.message
+                ? `${data.message} ${rowsCount} records imported. ${activeTab} dataset is now active.`
+                : `Dataset uploaded successfully. ${rowsCount} records imported. ${activeTab} dataset is now active.`
             )
             setSelectedFile(null)
             fetchDatasets()

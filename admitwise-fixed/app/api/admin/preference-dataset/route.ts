@@ -2,9 +2,14 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getAdminSession } from "@/lib/admin-auth"
 import Papa from "papaparse"
+import fs from "fs"
+import path from "path"
+import os from "os"
 
 export const maxDuration = 300 // 5 minutes timeout for large datasets
 export const dynamic = "force-dynamic"
+
+const MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024 // 30 MB = 31,457,280 bytes
 
 const REQUIRED_COLUMNS = [
   "college_code",
@@ -23,6 +28,87 @@ const REQUIRED_COLUMNS = [
   "closing_percentile",
   "city",
 ]
+
+interface ParsedMultipart {
+  round: string
+  fileName: string
+  fileSize: number
+  fileContent: string
+}
+
+async function parseMultipartForm(req: Request): Promise<ParsedMultipart> {
+  const contentType = req.headers.get("content-type") || ""
+
+  // 1. Try standard req.formData() first
+  try {
+    const formData = await req.formData()
+    const file = formData.get("file") as File | null
+    const round = ((formData.get("round") as string) || "Round 1").trim()
+
+    if (file) {
+      const fileContent = await file.text()
+      return {
+        round,
+        fileName: file.name || "uploaded.csv",
+        fileSize: file.size,
+        fileContent,
+      }
+    }
+  } catch (err: any) {
+    console.log("ℹ️ [Preference Dataset Upload] req.formData() size limit hit or parse error:", err?.message || err)
+  }
+
+  // 2. Fallback: Parse raw buffer directly from req.arrayBuffer()
+  const arrayBuf = await req.arrayBuffer()
+  const buffer = Buffer.from(arrayBuf)
+
+  const match = contentType.match(/boundary=([^;]+)/i)
+  if (!match) {
+    throw new Error("Invalid multipart Content-Type header (boundary missing)")
+  }
+
+  const rawBoundary = match[1].replace(/^["']|["']$/g, "").trim()
+  const boundary = `--${rawBoundary}`
+  const textContent = buffer.toString("utf-8")
+  const parts = textContent.split(boundary)
+
+  let round = "Round 1"
+  let fileName = "uploaded.csv"
+  let fileContent = ""
+  let fileSize = 0
+
+  for (const part of parts) {
+    if (!part || part === "--\r\n" || part === "--") continue
+
+    const headerEndIndex = part.indexOf("\r\n\r\n")
+    if (headerEndIndex === -1) continue
+
+    const headers = part.substring(0, headerEndIndex)
+    let body = part.substring(headerEndIndex + 4)
+
+    if (body.endsWith("\r\n")) {
+      body = body.substring(0, body.length - 2)
+    }
+
+    if (headers.includes('name="round"')) {
+      round = body.trim() || "Round 1"
+    } else if (headers.includes('name="file"')) {
+      const nameMatch = headers.match(/filename=["']?([^"'\r\n]+)["']?/i)
+      if (nameMatch) {
+        fileName = nameMatch[1]
+      }
+      fileContent = body
+      fileSize = Buffer.byteLength(body, "utf-8")
+    }
+  }
+
+  return {
+    round,
+    fileName,
+    fileSize,
+    fileContent,
+  }
+}
 
 async function checkAdminRole() {
   try {
@@ -68,7 +154,10 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const startTime = Date.now()
-  console.log("🚀 [Preference Dataset Upload] Upload API invoked")
+  console.log("\n=======================================================")
+  console.log("🚀 [Preference Dataset Upload] Upload Started")
+
+  let tmpFilePath: string | null = null
 
   try {
     const adminSession = await checkAdminRole()
@@ -77,37 +166,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Unauthorized access" }, { status: 401 })
     }
 
-    let formData: FormData
-    try {
-      formData = await req.formData()
-    } catch (formErr: any) {
-      console.error("❌ [Preference Dataset Upload] FormData parsing failed:", formErr)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Dataset file is too large for the server. Maximum allowed file size is 30 MB.",
-        },
-        { status: 413 }
-      )
-    }
+    const contentType = req.headers.get("content-type") || ""
+    const contentLengthStr = req.headers.get("content-length") || "0"
+    const requestSizeBytes = parseInt(contentLengthStr, 10)
 
-    const file = formData.get("file") as File | null
-    const round = (formData.get("round") as string || "Round 1").trim()
+    // Parse multipart upload
+    const { round, fileName, fileSize, fileContent } = await parseMultipartForm(req)
+    const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2)
 
-    if (!file) {
-      return NextResponse.json({ success: false, error: "CSV file is required" }, { status: 400 })
-    }
-
-    console.log(`[Preference Dataset Upload] Started: round=${round}, fileName=${file.name}, size=${(file.size / (1024 * 1024)).toFixed(2)} MB, user=${adminSession.userId}`)
-
-    // Read CSV file text
-    const fileContent = await file.text()
+    console.log(`File Name: ${fileName}`)
+    console.log(`File Size: ${fileSize} bytes (${fileSizeMB} MB)`)
+    console.log(`Content Type: ${contentType}`)
+    console.log(`Request Size: ${requestSizeBytes} bytes`)
 
     if (!fileContent || fileContent.trim().length === 0) {
       return NextResponse.json({ success: false, error: "CSV file is empty" }, { status: 400 })
     }
 
-    // Step 1: Validate Header Columns before full parse
+    // Verify exact byte size limit (30 MB = 31,457,280 bytes)
+    if (fileSize > MAX_FILE_SIZE_BYTES) {
+      console.warn(`⚠️ [Preference Dataset Upload] File size ${fileSizeMB} MB exceeds 30 MB limit`)
+      return NextResponse.json(
+        {
+          success: false,
+          error: `CSV exceeds 30 MB limit (${fileSizeMB} MB).`,
+        },
+        { status: 400 }
+      )
+    }
+
+    // Save temporary file to disk (os.tmpdir()) for disk-based parsing
+    const tmpFileName = `pref_ds_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.csv`
+    tmpFilePath = path.join(os.tmpdir(), tmpFileName)
+    fs.writeFileSync(tmpFilePath, fileContent, "utf-8")
+    console.log(`[Preference Dataset Upload] Saved temp file: ${tmpFilePath}`)
+
+    // Step 1: Validate Header Columns
     const firstLine = fileContent.split(/\r?\n/)[0] || ""
     const headerCols = firstLine
       .split(",")
@@ -116,7 +210,6 @@ export async function POST(req: Request) {
     console.log("[Preference Dataset Upload] Extracted CSV Headers:", headerCols)
 
     for (const requiredCol of REQUIRED_COLUMNS) {
-      // Allow flexible matches (e.g. college_code or collegecode)
       const hasCol = headerCols.some((h) => {
         const normH = h.replace(/[^a-z0-9]/g, "")
         const normReq = requiredCol.replace(/[^a-z0-9]/g, "")
@@ -125,6 +218,11 @@ export async function POST(req: Request) {
 
       if (!hasCol) {
         console.warn(`⚠️ [Preference Dataset Upload] Missing required column: ${requiredCol}`)
+        if (tmpFilePath && fs.existsSync(tmpFilePath)) {
+          try {
+            fs.unlinkSync(tmpFilePath)
+          } catch (e) {}
+        }
         return NextResponse.json(
           {
             success: false,
@@ -135,31 +233,32 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log("✅ [Preference Dataset Upload] Column validation passed")
+    console.log("✅ [Preference Dataset Upload] Validation: Header check passed")
+    console.log("⚙️ [Preference Dataset Upload] Parser Started")
 
-    // Step 2: Parse CSV rows
-    const parsed = Papa.parse<any>(fileContent, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (h) => h.trim().toLowerCase(),
+    // Parse CSV from temporary file disk stream
+    const fileStream = fs.createReadStream(tmpFilePath, { encoding: "utf-8" })
+    const parsedData: any[] = await new Promise((resolve, reject) => {
+      Papa.parse(fileStream, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (h) => h.trim().toLowerCase(),
+        complete: (results) => resolve(results.data),
+        error: (err) => reject(err),
+      })
     })
 
-    if (parsed.errors && parsed.errors.length > 0 && parsed.data.length === 0) {
-      console.error("❌ [Preference Dataset Upload] Papaparse error:", parsed.errors)
-      return NextResponse.json(
-        { success: false, error: "CSV format is invalid or corrupted." },
-        { status: 400 }
-      )
-    }
+    const rowsParsed = parsedData.length
+    console.log(`[Preference Dataset Upload] Rows Parsed: ${rowsParsed}`)
 
-    const totalRowsCount = parsed.data.length
-    console.log(`[Preference Dataset Upload] CSV parsed successfully: ${totalRowsCount} rows in ${(Date.now() - startTime)}ms`)
-
-    if (totalRowsCount === 0) {
+    if (rowsParsed === 0) {
+      if (tmpFilePath && fs.existsSync(tmpFilePath)) fs.unlinkSync(tmpFilePath)
       return NextResponse.json({ success: false, error: "No data rows found in CSV" }, { status: 400 })
     }
 
-    // Step 3: Deactivate existing active dataset for this round
+    const roundNumber = parseInt(round.replace(/\D/g, ""), 10) || 1
+
+    // Step: Archive existing active dataset for this round
     const existingActive = await db.preferenceGeneratorDataset.findFirst({
       where: { round, status: "Active" },
     })
@@ -174,34 +273,32 @@ export async function POST(req: Request) {
       })
     }
 
-    // Step 4: Create new active dataset record
+    // Step: Create new active dataset record
     const dataset = await db.preferenceGeneratorDataset.create({
       data: {
         exam: "MHT CET PCM",
         round,
         uploadedByUserId: adminSession.userId,
         status: "Active",
-        rowCount: totalRowsCount,
+        rowCount: rowsParsed,
         version: newVersion,
       },
     })
 
-    // Create Dataset Version history
+    // Create dataset version record
     await db.preferenceDatasetVersion.create({
       data: {
         datasetId: dataset.id,
         version: newVersion,
-        rowCount: totalRowsCount,
+        rowCount: rowsParsed,
         uploadedByUserId: adminSession.userId,
       },
     })
 
-    console.log(`[Preference Dataset Upload] Created active dataset ID ${dataset.id} (v${newVersion})`)
-
-    // Step 5: Map CSV data into database rows
+    // Map CSV rows into database cutoffs
     const cutoffRows: any[] = []
-    for (let idx = 0; idx < parsed.data.length; idx++) {
-      const row = parsed.data[idx]
+    for (let idx = 0; idx < parsedData.length; idx++) {
+      const row = parsedData[idx]
       const collegeCode = String(row.college_code || row.collegecode || "").trim()
       const collegeName = String(row.college_name || row.collegename || "").trim()
       const branchCode = String(row.branch_code || row.branchcode || "").trim()
@@ -243,9 +340,7 @@ export async function POST(req: Request) {
       })
     }
 
-    console.log(`[Preference Dataset Upload] Prepared ${cutoffRows.length} valid rows for database insertion`)
-
-    // Batch insert cutoffs in chunks of 2,000 to prevent parameter limits
+    // Batch insert cutoffs in chunks of 2,000
     const chunkSize = 2000
     let insertedCount = 0
 
@@ -255,18 +350,24 @@ export async function POST(req: Request) {
         data: chunk,
       })
       insertedCount += chunk.length
-      console.log(`[Preference Dataset Upload] Inserted batch ${Math.ceil(insertedCount / chunkSize)} (${insertedCount}/${cutoffRows.length})`)
     }
 
-    const duration = Date.now() - startTime
-    console.log(`🎉 [Preference Dataset Upload] Successfully completed! Imported ${insertedCount} records for ${round} (v${newVersion}) in ${duration}ms`)
+    console.log(`[Preference Dataset Upload] Rows Imported: ${insertedCount}`)
+    console.log(`🎉 [Preference Dataset Upload] Upload Completed in ${(Date.now() - startTime)}ms`)
+    console.log("=======================================================\n")
+
+    // Delete temp file from disk
+    if (tmpFilePath && fs.existsSync(tmpFilePath)) {
+      try {
+        fs.unlinkSync(tmpFilePath)
+      } catch (e) {}
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Dataset uploaded successfully. ${insertedCount.toLocaleString()} records imported. ${round} dataset is now active.`,
-      rows: insertedCount,
-      round,
-      version: newVersion,
+      rowsImported: insertedCount,
+      round: roundNumber,
+      message: `${round} dataset uploaded successfully.`,
       dataset: {
         id: dataset.id,
         round: dataset.round,
@@ -277,6 +378,13 @@ export async function POST(req: Request) {
     })
   } catch (error: any) {
     console.error("❌ [Preference Dataset Upload Fatal Error]:", error?.stack || error)
+
+    if (tmpFilePath && fs.existsSync(tmpFilePath)) {
+      try {
+        fs.unlinkSync(tmpFilePath)
+      } catch (e) {}
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -286,6 +394,7 @@ export async function POST(req: Request) {
     )
   }
 }
+
 
 export async function DELETE(req: Request) {
   try {
