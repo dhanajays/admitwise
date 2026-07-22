@@ -63,10 +63,19 @@ export default function StudentManagerPage() {
       const res = await fetch("/api/admin/users")
       if (res.ok) {
         const data = await res.json()
-        setStudents(data)
+        if (Array.isArray(data)) {
+          setStudents(data)
+        } else {
+          console.error("Unexpected response format from /api/admin/users:", data)
+          alert(`Admin users API error: ${data?.error || "Unexpected response format"}`)
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        console.error(`/api/admin/users returned ${res.status}:`, errData)
+        alert(`Failed to load students (HTTP ${res.status}): ${errData?.error || res.statusText}`)
       }
     } catch (err) {
-      console.error(err)
+      console.error("Network error fetching students:", err)
     } finally {
       setLoading(false)
     }
