@@ -12,6 +12,8 @@ import {
   Layers,
   User,
   Calendar,
+  X,
+  AlertTriangle,
 } from "lucide-react"
 
 const ROUNDS = ["Round 1", "Round 2", "Round 3", "Round 4"]
@@ -21,7 +23,9 @@ export default function AdminPreferenceDatasetPage() {
   const [datasets, setDatasets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [showReplaceModal, setShowReplaceModal] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
@@ -29,9 +33,15 @@ export default function AdminPreferenceDatasetPage() {
     setLoading(true)
     try {
       const res = await fetch("/api/admin/preference-dataset")
-      if (res.ok) {
+      const contentType = res.headers.get("content-type") || ""
+
+      if (contentType.includes("application/json")) {
         const data = await res.json()
-        setDatasets(data || [])
+        if (data.success && Array.isArray(data.datasets)) {
+          setDatasets(data.datasets)
+        } else if (Array.isArray(data)) {
+          setDatasets(data)
+        }
       }
     } catch (err) {
       console.error("Error fetching preference datasets:", err)
@@ -51,59 +61,116 @@ export default function AdminPreferenceDatasetPage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0])
+      const file = e.target.files[0]
+      if (file.size > 35 * 1024 * 1024) {
+        setErrorMsg("Dataset file exceeds 30 MB. Please reduce file size or split dataset.")
+        setSelectedFile(null)
+        return
+      }
+      setSelectedFile(file)
       setErrorMsg(null)
+      setSuccessMsg(null)
     }
   }
 
-  const handleUpload = async () => {
+  const initiateUpload = () => {
     if (!selectedFile) {
       setErrorMsg("Please select a CSV file to upload.")
       return
     }
 
-    setUploading(true)
-    setErrorMsg(null)
-    setSuccessMsg(null)
-
-    try {
-      const formData = new FormData()
-      formData.append("file", selectedFile)
-      formData.append("round", activeTab)
-
-      const res = await fetch("/api/admin/preference-dataset", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || "Failed to upload dataset.")
-      }
-
-      setSuccessMsg(`Successfully uploaded dataset Version for ${activeTab}!`)
-      setSelectedFile(null)
-      await fetchDatasets()
-    } catch (err: any) {
-      console.error("Upload error:", err)
-      setErrorMsg(err.message || "Failed to upload dataset.")
-    } finally {
-      setUploading(false)
+    // Check if active dataset exists for this round and ask for confirmation
+    if (currentDataset) {
+      setShowReplaceModal(true)
+    } else {
+      executeUpload()
     }
   }
 
+  const executeUpload = () => {
+    if (!selectedFile) return
+    setShowReplaceModal(false)
+    setUploading(true)
+    setUploadProgress(0)
+    setErrorMsg(null)
+    setSuccessMsg(null)
+
+    const formData = new FormData()
+    formData.append("file", selectedFile)
+    formData.append("round", activeTab)
+
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", "/api/admin/preference-dataset", true)
+
+    // Upload progress monitoring
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100)
+        setUploadProgress(percent)
+      }
+    }
+
+    xhr.onload = () => {
+      setUploading(false)
+      const contentType = xhr.getResponseHeader("content-type") || ""
+
+      if (contentType.includes("application/json")) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          if (data.success) {
+            setSuccessMsg(
+              data.message ||
+                `Dataset uploaded successfully. ${data.rows?.toLocaleString() || ""} records imported. ${activeTab} dataset is now active.`
+            )
+            setSelectedFile(null)
+            fetchDatasets()
+          } else {
+            setErrorMsg(data.error || "Upload failed. Please check the CSV format.")
+          }
+        } catch {
+          setErrorMsg("Upload failed. Invalid server response.")
+        }
+      } else {
+        const responseText = xhr.responseText || ""
+        if (xhr.status === 413 || responseText.includes("Request Entity Too Large")) {
+          setErrorMsg("Dataset file is too large for the server. Maximum allowed file size is 30 MB.")
+        } else {
+          setErrorMsg("Server temporarily unavailable. Please try again later.")
+        }
+      }
+    }
+
+    xhr.onerror = () => {
+      setUploading(false)
+      setErrorMsg("Network connection lost. Please check your internet connection and try again.")
+    }
+
+    xhr.send(formData)
+  }
+
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this dataset?")) return
+    if (!confirm("Are you sure you want to delete this dataset version?")) return
+    setErrorMsg(null)
+    setSuccessMsg(null)
     try {
       const res = await fetch(`/api/admin/preference-dataset?id=${id}`, {
         method: "DELETE",
       })
-      if (res.ok) {
-        setSuccessMsg("Dataset deleted successfully.")
-        await fetchDatasets()
+      const contentType = res.headers.get("content-type") || ""
+      if (contentType.includes("application/json")) {
+        const data = await res.json()
+        if (data.success) {
+          setSuccessMsg(data.message || "Dataset deleted successfully.")
+          fetchDatasets()
+        } else {
+          setErrorMsg(data.error || "Failed to delete dataset.")
+        }
+      } else {
+        setErrorMsg("Failed to delete dataset.")
       }
     } catch (err) {
       console.error("Delete error:", err)
+      setErrorMsg("Failed to delete dataset.")
     }
   }
 
@@ -128,6 +195,7 @@ export default function AdminPreferenceDatasetPage() {
               setActiveTab(round)
               setErrorMsg(null)
               setSuccessMsg(null)
+              setSelectedFile(null)
             }}
             className={`py-2.5 px-4 font-semibold text-xs border-b-2 transition-all cursor-pointer ${
               activeTab === round
@@ -173,30 +241,55 @@ export default function AdminPreferenceDatasetPage() {
                 type="file"
                 accept=".csv"
                 id="csv-upload"
+                disabled={uploading}
                 className="hidden"
                 onChange={handleFileChange}
               />
               <label
                 htmlFor="csv-upload"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
+                  uploading
+                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                    : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                }`}
               >
                 Browse CSV File
               </label>
             </div>
             {selectedFile && (
               <p className="text-xs font-semibold text-blue-600 truncate">
-                Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                Selected: {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
               </p>
             )}
           </div>
 
+          {/* Progress Bar during Upload */}
+          {uploading && (
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-semibold text-blue-600">
+                <span>Uploading Dataset...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           <button
             type="button"
-            onClick={handleUpload}
+            onClick={initiateUpload}
             disabled={uploading || !selectedFile}
             className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white py-2.5 text-xs font-bold shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
           >
-            {uploading ? "Uploading & Processing..." : currentDataset ? `Replace Dataset (v${currentDataset.version + 1})` : "Upload Active Dataset"}
+            {uploading
+              ? `Uploading Dataset... ${uploadProgress}%`
+              : currentDataset
+              ? `Replace Dataset (v${currentDataset.version + 1})`
+              : "Upload Active Dataset"}
           </button>
         </div>
 
@@ -287,7 +380,7 @@ export default function AdminPreferenceDatasetPage() {
                     <button
                       type="button"
                       onClick={() => handleDelete(item.id)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                      className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
                       title="Delete Dataset Version"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -299,6 +392,49 @@ export default function AdminPreferenceDatasetPage() {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal to Replace Existing Active Dataset */}
+      {showReplaceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                Replace Existing Dataset?
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowReplaceModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              A dataset already exists for <strong className="text-slate-900">{activeTab}</strong> (Version {currentDataset?.version}). Uploading a new CSV will archive the current dataset and set the new version as active.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowReplaceModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeUpload}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors cursor-pointer"
+              >
+                Replace Dataset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
