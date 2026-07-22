@@ -31,6 +31,9 @@ export async function POST(req: Request) {
     let savedPercentile: number | undefined = undefined
 
     if (session && session.user) {
+      console.log("🔍 [DEBUG GENERATE ROUTE] db exists:", !!db)
+      console.log("🔍 [DEBUG GENERATE ROUTE] db keys count:", db ? Object.keys(db).length : 0)
+      console.log("🔍 [DEBUG GENERATE ROUTE] db.preferenceGeneratorPurchase:", (db as any)?.preferenceGeneratorPurchase)
       const purchase = await db.preferenceGeneratorPurchase.findUnique({
         where: {
           userId_round: {
