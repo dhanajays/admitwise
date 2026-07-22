@@ -18,6 +18,8 @@ import {
   Zap,
 } from "lucide-react"
 import { PrioritySelector } from "@/components/preference-generator/priority-selector"
+import { SiteHeader } from "@/components/site-header"
+import { SiteFooter } from "@/components/site-footer"
 import type { PreferenceResultItem } from "@/lib/preference-generator/types"
 import { loadRazorpayScript } from "@/lib/razorpay-client"
 
@@ -94,12 +96,6 @@ export default function PreferenceListGeneratorPage() {
             setAvailableBranches(data.branches || [])
             setAvailableCities(["ANY", ...(data.cities || [])])
             setDatasetInfo(data.datasetInfo || null)
-
-            // Default branches if none selected yet
-            if (preferredBranches.length === 0 && data.branches?.length > 0) {
-              const defaults = data.branches.slice(0, 5)
-              setPreferredBranches(defaults)
-            }
           }
         }
       } catch (err) {
@@ -352,8 +348,10 @@ export default function PreferenceListGeneratorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950/20 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <SiteHeader />
+      <main className="flex-1 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto space-y-8">
         {/* Header Title Section */}
         <div className="text-center space-y-3">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-xs font-bold tracking-wide uppercase shadow-xs">
@@ -645,6 +643,8 @@ export default function PreferenceListGeneratorPage() {
           </div>
         )}
       </div>
-    </div>
+    </main>
+    <SiteFooter />
+  </div>
   )
 }
