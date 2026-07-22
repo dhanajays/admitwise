@@ -67,6 +67,12 @@ const sidebarLinks: SidebarLink[] = [
     roles: ["Super Admin", "Manager"],
   },
   {
+    href: "/admin/preference-list",
+    label: "Preference List",
+    icon: ClipboardList,
+    roles: ["Super Admin", "Manager"],
+  },
+  {
     href: "/admin/cms",
     label: "CMS Editor",
     icon: FileCode,

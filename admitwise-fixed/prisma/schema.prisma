@@ -97,6 +97,8 @@ model User {
   datasets                Dataset[] @relation("UserDatasets")
   vacantSeatDatasets      VacantSeatDataset[] @relation("UserVacantSeatDatasets")
   allIndiaDatasets        AllIndiaDataset[] @relation("UserAllIndiaDatasets")
+  preferenceGeneratorDatasets PreferenceGeneratorDataset[] @relation("UserPreferenceDatasets")
+  preferenceGeneratorPurchases PreferenceGeneratorPurchase[]
   notifications           Notification[]
   userProfile             UserProfile?
 }
@@ -461,3 +463,76 @@ model AllIndiaCutoff {
 
   @@index([meritExam, round, category, gender, pwd, defense])
 }
+
+// ── Preference List Generator Models ─────────────────────────────────────────
+
+model PreferenceGeneratorDataset {
+  id               String   @id @default(cuid())
+  exam             String   @default("MHT CET PCM") // "MHT CET PCM"
+  round            String   // "Round 1", "Round 2", "Round 3", "Round 4"
+  uploadedByUserId String
+  uploadedAt       DateTime @default(now())
+  status           String   @default("Active") // "Active", "Inactive"
+  rowCount         Int      @default(0)
+  version          Int      @default(1)
+  filePath         String?  @db.Text
+
+  uploadedByUser   User                      @relation("UserPreferenceDatasets", fields: [uploadedByUserId], references: [id])
+  cutoffs          PreferenceCutoff[]
+  versions         PreferenceDatasetVersion[]
+
+  @@unique([exam, round, status])
+}
+
+model PreferenceDatasetVersion {
+  id               String   @id @default(cuid())
+  datasetId        String
+  version          Int      @default(1)
+  rowCount         Int      @default(0)
+  uploadedByUserId String
+  createdAt        DateTime @default(now())
+
+  dataset PreferenceGeneratorDataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+}
+
+model PreferenceCutoff {
+  id                String  @id @default(cuid())
+  datasetId         String
+  round             String  // "Round 1", "Round 2", "Round 3", "Round 4"
+  collegeCode       String
+  collegeName       String
+  branchCode        String
+  branchName        String
+  status            String
+  homeUniversity    String
+  seatSection       String
+  stage             String
+  categoryCodeRaw   String  // e.g. "GOPENS", "LOPENS"
+  gender            String
+  disability        String  // "Yes" | "No"
+  defenseQuota      String  // "Yes" | "No"
+  closingRank       Int
+  closingPercentile Float
+  city              String
+
+  dataset PreferenceGeneratorDataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@index([round, categoryCodeRaw, closingPercentile])
+  @@index([datasetId])
+}
+
+model PreferenceGeneratorPurchase {
+  id              String   @id @default(cuid())
+  userId          String
+  round           String   // "Round 1", "Round 2", "Round 3", "Round 4"
+  savedPercentile Float
+  paymentId       String?
+  amount          Float    @default(599)
+  status          String   @default("Paid") // "Paid", "Pending", "Failed"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, round])
+}

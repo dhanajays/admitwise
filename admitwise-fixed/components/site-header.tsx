@@ -23,6 +23,7 @@ import { useMemo } from "react"
 const navLinks = [
   { href: "/", label: "Home" },
   { href: "/predictor", label: "Predictor" },
+  { href: "/preference-list-generator", label: "Preference List Generator" },
   { href: "/vacant-seat-tracker", label: "Vacant Seat Tracker" },
   { href: "/plans", label: "Plans" },
   { href: "/about", label: "About" },

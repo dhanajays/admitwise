@@ -1,6 +1,6 @@
 import { syncWithDatabase } from "./subscription/store"
 
-function loadScript(src: string): Promise<boolean> {
+export function loadRazorpayScript(src: string): Promise<boolean> {
   return new Promise((resolve) => {
     if (typeof window === "undefined") return resolve(false)
     if ((window as any).Razorpay) return resolve(true)

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Loader2, Plus, Lock, Check, CreditCard, UserCircle } from "lucide-react"
+import { Loader2, Plus, Lock, Check, CreditCard, UserCircle, ClipboardList } from "lucide-react"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 
@@ -445,6 +445,24 @@ export function DashboardClient() {
           <Link href="/dashboard/profile">
             <button className="mt-4 w-full rounded-full border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition duration-300">
               Edit Profile →
+            </button>
+          </Link>
+        </div>
+
+        {/* Preference List Generator Quick Link */}
+        <div className="glass-card rounded-2xl p-6 shadow-md border border-slate-200 bg-white/90 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">
+              <ClipboardList className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Preference List Generator</h3>
+              <p className="text-[10px] text-slate-400 mt-0.5">MHT CET Option Form Generator</p>
+            </div>
+          </div>
+          <Link href="/preference-list-generator">
+            <button className="mt-4 w-full rounded-full border border-indigo-200 bg-indigo-50 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-600 hover:text-white transition duration-300 shadow-2xs">
+              Generate & View Preference List →
             </button>
           </Link>
         </div>
