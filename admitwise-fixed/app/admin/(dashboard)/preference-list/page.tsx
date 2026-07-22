@@ -89,76 +89,103 @@ export default function AdminPreferenceDatasetPage() {
     }
   }
 
-  const executeUpload = () => {
+  const [uploadStatusText, setUploadStatusText] = useState<string>("")
+
+  const executeUpload = async () => {
     if (!selectedFile) return
     setShowReplaceModal(false)
     setUploading(true)
     setUploadProgress(0)
     setErrorMsg(null)
     setSuccessMsg(null)
+    setUploadStatusText("Preparing file chunks...")
 
-    console.log("[Frontend Debug] Network Request: POST /api/admin/preference-dataset")
-    console.log("[Frontend Debug] Uploading file:", selectedFile.name, selectedFile.size, "bytes")
+    const CHUNK_SIZE = 3 * 1024 * 1024 // 3 MB per chunk for 100% Vercel Serverless compatibility
+    const totalSize = selectedFile.size
+    const totalChunks = Math.max(1, Math.ceil(totalSize / CHUNK_SIZE))
+    const uploadId = `upl_${selectedFile.name.replace(/[^a-zA-Z0-9]/g, "_")}_${selectedFile.size}`
 
-    const formData = new FormData()
-    formData.append("file", selectedFile)
-    formData.append("round", activeTab)
+    console.log(`🚀 [Chunked Upload] File: ${selectedFile.name}, Total Size: ${totalSize} bytes (${(totalSize / (1024 * 1024)).toFixed(2)} MB), Total Chunks: ${totalChunks}, uploadId: ${uploadId}`)
 
-    const xhr = new XMLHttpRequest()
-    xhr.open("POST", "/api/admin/preference-dataset", true)
+    // Resume Check: Check if any chunks were previously received
+    let uploadedChunkIndices: number[] = []
+    try {
+      const resumeRes = await fetch(`/api/admin/preference-dataset/chunk?uploadId=${uploadId}`)
+      if (resumeRes.ok) {
+        const resumeData = await resumeRes.json()
+        if (resumeData.success && Array.isArray(resumeData.uploadedChunks)) {
+          uploadedChunkIndices = resumeData.uploadedChunks
+        }
+      }
+    } catch (e) {
+      console.warn("Resume check failed, proceeding with standard chunk upload:", e)
+    }
 
-    // Upload progress monitoring
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const percent = Math.round((event.loaded / event.total) * 100)
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      if (uploadedChunkIndices.includes(chunkIndex) && chunkIndex < totalChunks - 1) {
+        console.log(`⏩ Skipping Chunk ${chunkIndex + 1}/${totalChunks} (already uploaded)`)
+        const percent = Math.round(((chunkIndex + 1) / totalChunks) * 100)
         setUploadProgress(percent)
+        continue
       }
-    }
 
-    xhr.onload = () => {
-      setUploading(false)
-      const contentType = xhr.getResponseHeader("content-type") || ""
+      const start = chunkIndex * CHUNK_SIZE
+      const end = Math.min(start + CHUNK_SIZE, totalSize)
+      const chunkBlob = selectedFile.slice(start, end)
 
-      if (contentType.includes("application/json")) {
-        try {
-          const data = JSON.parse(xhr.responseText)
-          if (data.success) {
-            const rowsCount = (data.rowsImported || data.rows || 0).toLocaleString()
-            setSuccessMsg(
-              data.message
-                ? `${data.message} ${rowsCount} records imported. ${activeTab} dataset is now active.`
-                : `Dataset uploaded successfully. ${rowsCount} records imported. ${activeTab} dataset is now active.`
-            )
-            setSelectedFile(null)
-            fetchDatasets()
-          } else {
-            setErrorMsg(data.error || "Upload failed. Please check the CSV format.")
-          }
-        } catch {
-          setErrorMsg("Upload failed. Invalid server response.")
-        }
-      } else {
-        const responseText = xhr.responseText || ""
-        if (xhr.status === 413 || responseText.includes("Request Entity Too Large")) {
-          setErrorMsg("Dataset file is too large for the server. Maximum allowed file size is 30 MB.")
-        } else if (xhr.status === 401 || xhr.status === 403) {
-          setErrorMsg("Unauthorized access. Please log in to your admin account again.")
-        } else if (xhr.status === 400) {
-          setErrorMsg("Invalid CSV format or missing required columns.")
-        } else if (xhr.status === 500) {
-          setErrorMsg("Server processing error during database import. Please try again.")
+      const formData = new FormData()
+      formData.append("uploadId", uploadId)
+      formData.append("chunkIndex", chunkIndex.toString())
+      formData.append("totalChunks", totalChunks.toString())
+      formData.append("round", activeTab)
+      formData.append("filename", selectedFile.name)
+      formData.append("chunk", chunkBlob, `chunk_${chunkIndex}.tmp`)
+
+      setUploadStatusText(`Uploading Chunk ${chunkIndex + 1} of ${totalChunks}...`)
+
+      try {
+        const res = await fetch("/api/admin/preference-dataset/chunk", {
+          method: "POST",
+          body: formData,
+        })
+
+        const contentType = res.headers.get("content-type") || ""
+        let data: any = null
+
+        if (contentType.includes("application/json")) {
+          data = await res.json()
         } else {
-          setErrorMsg("Server temporarily unavailable. Please try again later.")
+          const text = await res.text()
+          throw new Error(text || `Server error (${res.status})`)
         }
+
+        if (!data.success) {
+          throw new Error(data.error || `Failed to upload chunk ${chunkIndex + 1}`)
+        }
+
+        const percent = Math.round(((chunkIndex + 1) / totalChunks) * 100)
+        setUploadProgress(percent)
+
+        if (data.completed) {
+          setUploadStatusText("Merging, validating & importing dataset...")
+          const rowsCount = (data.rowsImported || data.rows || 0).toLocaleString()
+          setSuccessMsg(
+            data.message
+              ? `${data.message} ${rowsCount} records imported. ${activeTab} dataset is now active.`
+              : `Dataset uploaded successfully. ${rowsCount} records imported. ${activeTab} dataset is now active.`
+          )
+          setSelectedFile(null)
+          fetchDatasets()
+          setUploading(false)
+          return
+        }
+      } catch (err: any) {
+        console.error(`❌ Chunk ${chunkIndex + 1} Error:`, err)
+        setErrorMsg(err.message || `Failed uploading chunk ${chunkIndex + 1}. Click Upload to resume.`)
+        setUploading(false)
+        return
       }
     }
-
-    xhr.onerror = () => {
-      setUploading(false)
-      setErrorMsg("Network connection lost. Please check your internet connection and try again.")
-    }
-
-    xhr.send(formData)
   }
 
   const handleDelete = async (id: string) => {
@@ -280,7 +307,7 @@ export default function AdminPreferenceDatasetPage() {
           {uploading && (
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-semibold text-blue-600">
-                <span>Uploading Dataset...</span>
+                <span>{uploadStatusText || "Uploading Dataset..."}</span>
                 <span>{uploadProgress}%</span>
               </div>
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -299,7 +326,7 @@ export default function AdminPreferenceDatasetPage() {
             className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white py-2.5 text-xs font-bold shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
           >
             {uploading
-              ? `Uploading Dataset... ${uploadProgress}%`
+              ? uploadStatusText || `Uploading Dataset... ${uploadProgress}%`
               : currentDataset
               ? `Replace Dataset (v${currentDataset.version + 1})`
               : "Upload Active Dataset"}
