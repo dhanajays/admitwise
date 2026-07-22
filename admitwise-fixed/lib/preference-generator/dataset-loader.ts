@@ -21,23 +21,23 @@ export interface PreferenceDatasetRow {
   city: string
 }
 
-const REQUIRED_COLUMNS = [
-  "college_code",
-  "college_name",
-  "branch_code",
-  "branch_name",
-  "status",
-  "home_university",
-  "seat_section",
-  "stage",
-  "category_code",
-  "gender",
-  "disability",
-  "defense_q",
-  "closing_rank",
-  "closing_percentile",
-  "city",
-]
+const COLUMN_ALIASES: Record<string, string[]> = {
+  college_code: ["college_code", "collegecode"],
+  college_name: ["college_name", "collegename"],
+  branch_code: ["branch_code", "branchcode"],
+  branch_name: ["branch_name", "branchname"],
+  status: ["status"],
+  home_university: ["home_university", "homeuniversity"],
+  seat_section: ["seat_section", "seatsection"],
+  stage: ["stage"],
+  category_code: ["category_code_raw", "category_code", "categorycode", "category"],
+  gender: ["gender"],
+  disability: ["disability"],
+  defense_q: ["defense_quota", "defense_q", "defenseq"],
+  closing_rank: ["closing_rank", "closingrank"],
+  closing_percentile: ["closing_percentile", "closingpercentile"],
+  city: ["city"],
+}
 
 function normalizeCapRoundFileName(roundInput: string): string {
   const clean = roundInput.trim().toLowerCase()
@@ -88,24 +88,26 @@ export class PreferenceDatasetLoader {
         }
       }
 
-      // Validate required columns on header line
+      // Validate required columns on header line using flexible aliases
       const firstLine = fileContent.split(/\r?\n/)[0] || ""
       const headerCols = firstLine
         .split(",")
         .map((c) => c.trim().replace(/^["']|["']$/g, "").toLowerCase())
 
-      for (const requiredCol of REQUIRED_COLUMNS) {
+      for (const [canonicalName, aliases] of Object.entries(COLUMN_ALIASES)) {
         const hasCol = headerCols.some((h) => {
           const normH = h.replace(/[^a-z0-9]/g, "")
-          const normReq = requiredCol.replace(/[^a-z0-9]/g, "")
-          return normH === normReq || h === requiredCol
+          return aliases.some((alias) => {
+            const normAlias = alias.replace(/[^a-z0-9]/g, "")
+            return normH === normAlias || h === alias
+          })
         })
 
         if (!hasCol) {
           return {
             success: false,
             records: [],
-            error: `Missing required column: ${requiredCol} in ${fileName}`,
+            error: `Missing required column: ${canonicalName} in ${fileName}`,
             roundName,
             fileName,
           }

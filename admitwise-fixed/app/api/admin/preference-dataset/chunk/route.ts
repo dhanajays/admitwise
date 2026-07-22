@@ -9,23 +9,23 @@ import os from "os"
 export const maxDuration = 300 // 5 minutes execution limit for merging & database batching
 export const dynamic = "force-dynamic"
 
-const REQUIRED_COLUMNS = [
-  "college_code",
-  "college_name",
-  "branch_code",
-  "branch_name",
-  "status",
-  "home_university",
-  "seat_section",
-  "stage",
-  "category_code",
-  "gender",
-  "disability",
-  "defense_q",
-  "closing_rank",
-  "closing_percentile",
-  "city",
-]
+const COLUMN_ALIASES: Record<string, string[]> = {
+  college_code: ["college_code", "collegecode"],
+  college_name: ["college_name", "collegename"],
+  branch_code: ["branch_code", "branchcode"],
+  branch_name: ["branch_name", "branchname"],
+  status: ["status"],
+  home_university: ["home_university", "homeuniversity"],
+  seat_section: ["seat_section", "seatsection"],
+  stage: ["stage"],
+  category_code: ["category_code_raw", "category_code", "categorycode", "category"],
+  gender: ["gender"],
+  disability: ["disability"],
+  defense_q: ["defense_quota", "defense_q", "defenseq"],
+  closing_rank: ["closing_rank", "closingrank"],
+  closing_percentile: ["closing_percentile", "closingpercentile"],
+  city: ["city"],
+}
 
 function normalizeCapRound(input: string): string {
   const clean = input.trim().toLowerCase()
@@ -195,18 +195,20 @@ export async function POST(req: Request) {
 
     console.log("[Chunk Upload] Extracted Headers:", headerCols)
 
-    for (const requiredCol of REQUIRED_COLUMNS) {
+    for (const [canonicalName, aliases] of Object.entries(COLUMN_ALIASES)) {
       const hasCol = headerCols.some((h) => {
         const normH = h.replace(/[^a-z0-9]/g, "")
-        const normReq = requiredCol.replace(/[^a-z0-9]/g, "")
-        return normH === normReq || h === requiredCol
+        return aliases.some((alias) => {
+          const normAlias = alias.replace(/[^a-z0-9]/g, "")
+          return normH === normAlias || h === alias
+        })
       })
 
       if (!hasCol) {
-        console.warn(`⚠️ [Chunk Upload] Missing required column: ${requiredCol}`)
+        console.warn(`⚠️ [Chunk Upload] Missing required column: ${canonicalName}`)
         if (fs.existsSync(mergedFilePath)) fs.unlinkSync(mergedFilePath)
         return NextResponse.json(
-          { success: false, error: `Missing required column: ${requiredCol}` },
+          { success: false, error: `Missing required column: ${canonicalName}` },
           { status: 400 }
         )
       }
