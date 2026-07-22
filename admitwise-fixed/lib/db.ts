@@ -9,7 +9,18 @@ const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
 })
 
-export const db = globalThis.prisma || new PrismaClient({ adapter })
+function getPrismaClient(): PrismaClient {
+  if (process.env.NODE_ENV === "production") {
+    return new PrismaClient({ adapter })
+  }
 
-if (process.env.NODE_ENV !== "production") globalThis.prisma = db
+  // In development, ensure cached client has all latest models
+  if (!globalThis.prisma || !("preferenceGeneratorPurchase" in globalThis.prisma)) {
+    globalThis.prisma = new PrismaClient({ adapter })
+  }
+
+  return globalThis.prisma
+}
+
+export const db = getPrismaClient()
 export default db
