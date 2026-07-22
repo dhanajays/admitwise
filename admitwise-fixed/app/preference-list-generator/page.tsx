@@ -58,14 +58,22 @@ export default function PreferenceListGeneratorPage() {
         const res = await fetch(`/api/preference-generator/dataset?round=${encodeURIComponent(capRound)}`)
         if (res.ok) {
           const data = await res.json()
-          setAvailableBranches(data.branches || [])
-          setAvailableCities(["ANY", ...(data.cities || [])])
-          setDatasetInfo(data.datasetInfo || null)
+          if (data.error) {
+            setErrorMsg(data.error)
+            setAvailableBranches([])
+            setAvailableCities(["ANY"])
+            setDatasetInfo(null)
+          } else {
+            setErrorMsg(null)
+            setAvailableBranches(data.branches || [])
+            setAvailableCities(["ANY", ...(data.cities || [])])
+            setDatasetInfo(data.datasetInfo || null)
 
-          // Default branches if none selected yet
-          if (preferredBranches.length === 0 && data.branches?.length > 0) {
-            const defaults = data.branches.slice(0, 5)
-            setPreferredBranches(defaults)
+            // Default branches if none selected yet
+            if (preferredBranches.length === 0 && data.branches?.length > 0) {
+              const defaults = data.branches.slice(0, 5)
+              setPreferredBranches(defaults)
+            }
           }
         }
       } catch (err) {

@@ -1,57 +1,53 @@
-import { db } from "@/lib/db"
+import { PreferenceDatasetLoader } from "./dataset-loader"
 import type { DatasetOptions, PreferenceInput, PreferenceResultItem } from "./types"
 
 export class PreferenceGeneratorService {
   /**
-   * Fetches active dataset metadata, distinct branches (alphabetically), and distinct cities for a given CAP Round.
+   * Fetches dataset metadata, distinct branches (alphabetically), and distinct cities for a given CAP Round directly from the /dataset folder.
    */
-  static async getDatasetOptions(round: string): Promise<DatasetOptions> {
+  static async getDatasetOptions(round: string): Promise<DatasetOptions & { error?: string }> {
     try {
-      const dataset = await db.preferenceGeneratorDataset.findFirst({
-        where: { round, status: "Active" },
-        orderBy: { version: "desc" },
-      })
+      const res = PreferenceDatasetLoader.loadDatasetForRound(round)
 
-      if (!dataset) {
+      if (!res.success) {
         return {
           branches: [],
           cities: [],
           datasetInfo: null,
+          error: res.error,
         }
       }
 
-      // Fetch distinct branches and cities for this dataset
-      const branchesRaw = await db.preferenceCutoff.findMany({
-        where: { datasetId: dataset.id },
-        distinct: ["branchName"],
-        select: { branchName: true },
-        orderBy: { branchName: "asc" },
-      })
+      // Extract unique branches (alphabetically sorted)
+      const branchesSet = new Set<string>()
+      const citiesSet = new Set<string>()
 
-      const citiesRaw = await db.preferenceCutoff.findMany({
-        where: { datasetId: dataset.id },
-        distinct: ["city"],
-        select: { city: true },
-        orderBy: { city: "asc" },
-      })
+      for (const item of res.records) {
+        if (item.branchName) branchesSet.add(item.branchName)
+        if (item.city) citiesSet.add(item.city)
+      }
+
+      const branches = Array.from(branchesSet).sort((a, b) => a.localeCompare(b))
+      const cities = Array.from(citiesSet).sort((a, b) => a.localeCompare(b))
 
       return {
-        branches: branchesRaw.map((b) => b.branchName).filter(Boolean),
-        cities: citiesRaw.map((c) => c.city).filter(Boolean),
+        branches,
+        cities,
         datasetInfo: {
-          id: dataset.id,
-          round: dataset.round,
-          uploadedAt: dataset.uploadedAt.toISOString(),
-          rowCount: dataset.rowCount,
-          version: dataset.version,
+          id: res.fileName,
+          round: res.roundName,
+          uploadedAt: new Date().toISOString(),
+          rowCount: res.records.length,
+          version: 1,
         },
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in PreferenceGeneratorService.getDatasetOptions:", error)
       return {
         branches: [],
         cities: [],
         datasetInfo: null,
+        error: "Failed to load options for the selected CAP Round.",
       }
     }
   }
@@ -59,32 +55,28 @@ export class PreferenceGeneratorService {
   /**
    * Generates the preference list following student percentile, CAP round, branch priorities, and city priorities.
    */
-  static async generatePreferenceList(input: PreferenceInput): Promise<PreferenceResultItem[]> {
+  static async generatePreferenceList(
+    input: PreferenceInput
+  ): Promise<{ items: PreferenceResultItem[]; error?: string }> {
     const { percentile, round, preferredBranches, preferredCities } = input
 
-    const dataset = await db.preferenceGeneratorDataset.findFirst({
-      where: { round, status: "Active" },
-      orderBy: { version: "desc" },
-    })
-
-    if (!dataset) {
-      return []
+    const res = PreferenceDatasetLoader.loadDatasetForRound(round)
+    if (!res.success) {
+      return { items: [], error: res.error }
     }
 
-    // Step 1: Fetch cutoffs for GOPENS & LOPENS in range [30 -> 100] percentile
-    const cutoffs = await db.preferenceCutoff.findMany({
-      where: {
-        datasetId: dataset.id,
-        categoryCodeRaw: { in: ["GOPENS", "LOPENS"] },
-        closingPercentile: { gte: 30, lte: 100 },
-      },
-    })
+    const cutoffs = res.records.filter(
+      (r) =>
+        (r.categoryCodeRaw === "GOPENS" || r.categoryCodeRaw === "LOPENS") &&
+        r.closingPercentile >= 30 &&
+        r.closingPercentile <= 100
+    )
 
     if (!cutoffs || cutoffs.length === 0) {
-      return []
+      return { items: [] }
     }
 
-    // Step 2: For each college_code + branch_code, keep GOPENS first. Fallback to LOPENS if no GOPENS exists.
+    // Step 1: For each college_code + branch_code, keep GOPENS first. Fallback to LOPENS if no GOPENS exists.
     const collegeBranchMap = new Map<string, typeof cutoffs[0]>()
 
     // Process GOPENS first
@@ -110,7 +102,6 @@ export class PreferenceGeneratorService {
     const moderateMin = 50                       // (Percentile - 5) -> 50
     const safeMin = 30                           // 50 -> 30
 
-    // Determine Stage for a cutoff
     function getStageTag(cp: number): "Good" | "Moderate" | "Safe" | null {
       if (cp >= goodMin && cp <= 100) return "Good"
       if (cp >= moderateMin && cp < goodMin) return "Moderate"
@@ -127,14 +118,12 @@ export class PreferenceGeneratorService {
 
     const normCities = isAnyCity ? ["ANY"] : preferredCities.map((c) => c.trim().toLowerCase())
 
-    // Filter records into stages and index maps
     const stages: ("Good" | "Moderate" | "Safe")[] = ["Good", "Moderate", "Safe"]
     const resultList: PreferenceResultItem[] = []
 
     for (const stage of stages) {
       for (const cityPref of normCities) {
         for (const branchPref of normBranches) {
-          // Filter matching records for this Stage + City + Branch combination
           const bucket = filteredRecords.filter((rec) => {
             const stageTag = getStageTag(rec.closingPercentile)
             if (stageTag !== stage) return false
@@ -172,6 +161,6 @@ export class PreferenceGeneratorService {
       }
     }
 
-    return resultList
+    return { items: resultList }
   }
 }

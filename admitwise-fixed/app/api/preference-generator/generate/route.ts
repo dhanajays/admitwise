@@ -48,13 +48,21 @@ export async function POST(req: Request) {
       }
     }
 
-    const allItems = await PreferenceGeneratorService.generatePreferenceList({
+    const result = await PreferenceGeneratorService.generatePreferenceList({
       percentile,
       round,
       preferredBranches,
       preferredCities,
     })
 
+    if (result.error) {
+      return NextResponse.json(
+        { success: false, error: result.error },
+        { status: 400 }
+      )
+    }
+
+    const allItems = result.items || []
     const totalCount = allItems.length
     const previewCount = isPaid ? totalCount : Math.min(5, totalCount)
     const items = isPaid ? allItems : allItems.slice(0, 5)
