@@ -13,9 +13,6 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const round = searchParams.get("round") || "Round 1"
 
-    console.log("🔍 [DEBUG PURCHASE ROUTE] db exists:", !!db)
-    console.log("🔍 [DEBUG PURCHASE ROUTE] db.preferenceGeneratorPurchase:", (db as any)?.preferenceGeneratorPurchase)
-
     const purchase = await db.preferenceGeneratorPurchase.findUnique({
       where: {
         userId_round: {

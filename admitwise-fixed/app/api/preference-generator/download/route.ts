@@ -28,8 +28,6 @@ export async function POST(req: Request) {
 
     let { percentile, round, preferredBranches, preferredCities } = parsed.data
 
-    console.log("🔍 [DEBUG DOWNLOAD ROUTE] db.preferenceGeneratorPurchase:", (db as any)?.preferenceGeneratorPurchase)
-
     // Check if purchased
     const purchase = await db.preferenceGeneratorPurchase.findUnique({
       where: {
