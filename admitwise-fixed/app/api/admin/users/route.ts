@@ -33,6 +33,12 @@ export async function GET(req: Request) {
           payments: {
             orderBy: { createdAt: "desc" },
           },
+          preferenceGeneratorPurchases: {
+            orderBy: { createdAt: "desc" },
+          },
+          preferenceGeneratorHistories: {
+            orderBy: { createdAt: "desc" },
+          },
         },
       })
 

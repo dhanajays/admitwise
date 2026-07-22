@@ -43,6 +43,7 @@ export function DashboardClient() {
   const [addonSuccess, setAddonSuccess] = useState(false)
   const [paymentsEnabled, setPaymentsEnabled] = useState(true)
   const [showDisabledModal, setShowDisabledModal] = useState(false)
+  const [prefPurchase, setPrefPurchase] = useState<any>(null)
 
   // Read from localStorage on mount and register storage listener for instant updates
   useEffect(() => {
@@ -56,6 +57,13 @@ export function DashboardClient() {
     syncWithDatabase().then((updated) => {
       setSub(updated)
     })
+
+    fetch("/api/preference-generator/purchase?round=Round%201")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.isPaid) setPrefPurchase(data)
+      })
+      .catch(() => {})
     
     fetch("/api/settings/payments")
       .then((res) => res.json())
@@ -193,6 +201,53 @@ export function DashboardClient() {
             </div>
           )}
         </div>
+
+        {/* PREFERENCE LIST GENERATOR PLAN CARD */}
+        {(prefPurchase || sub.plan === "premium" || sub.plan === "elite") && (
+          <div className="glass-card rounded-2xl p-6 shadow-md border border-indigo-200 bg-indigo-50/40 backdrop-blur-sm relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-indigo-100 pb-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1">
+                  Preference List Generator
+                </p>
+                <h3 className="font-heading text-xl font-bold text-slate-900">
+                  {sub.plan === "premium" || sub.plan === "elite"
+                    ? `Included in ${sub.plan.toUpperCase()} Plan`
+                    : `Preference List Generator (₹599)`}
+                </h3>
+              </div>
+              <span className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700 shadow-2xs">
+                Active
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+              <div>
+                <p className="text-slate-500 mb-0.5 font-medium">CAP Round</p>
+                <p className="font-bold text-slate-800">{prefPurchase?.purchase?.round || "All Rounds"}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 mb-0.5 font-medium">Saved Percentile</p>
+                <p className="font-bold text-slate-800">{prefPurchase?.purchase?.savedPercentile ? `${prefPurchase.purchase.savedPercentile}%` : "Unlocked"}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 mb-0.5 font-medium">Valid For</p>
+                <p className="font-bold text-indigo-700">Unlimited Generation</p>
+              </div>
+              <div>
+                <p className="text-slate-500 mb-0.5 font-medium">Expiry</p>
+                <p className="font-bold text-slate-800">No Expiry</p>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-indigo-100 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Purchased On: <strong className="text-slate-700">{formatDate(prefPurchase?.purchase?.createdAt || sub.activatedAt)}</strong></span>
+              <Link href="/preference-list-generator" className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline">
+                Generate Preference List →
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* PURCHASED ADD-ONS */}
         {purchasedAddons > 0 && (

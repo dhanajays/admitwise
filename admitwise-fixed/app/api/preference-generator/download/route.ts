@@ -28,25 +28,36 @@ export async function POST(req: Request) {
 
     let { percentile, round, preferredBranches, preferredCities } = parsed.data
 
-    // Check if purchased
-    const purchase = await db.preferenceGeneratorPurchase.findUnique({
-      where: {
-        userId_round: {
-          userId: session.user.id,
-          round,
-        },
-      },
+    // Check if user is subscriber or purchased round
+    let isPaid = false
+    const userRecord = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { currentPlan: true },
     })
 
-    if (!purchase || purchase.status !== "Paid") {
+    if (userRecord && (userRecord.currentPlan === "premium" || userRecord.currentPlan === "elite")) {
+      isPaid = true
+    } else if (db && (db as any).preferenceGeneratorPurchase) {
+      const purchase = await db.preferenceGeneratorPurchase.findUnique({
+        where: {
+          userId_round: {
+            userId: session.user.id,
+            round,
+          },
+        },
+      })
+      if (purchase && purchase.status === "Paid") {
+        isPaid = true
+        percentile = purchase.savedPercentile
+      }
+    }
+
+    if (!isPaid) {
       return NextResponse.json(
         { error: `You must unlock ${round} before downloading the PDF preference list.` },
         { status: 403 }
       )
     }
-
-    // Lock to saved percentile
-    percentile = purchase.savedPercentile
 
     const items = await PreferenceGeneratorService.generatePreferenceList({
       percentile,

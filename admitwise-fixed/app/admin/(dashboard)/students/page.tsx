@@ -14,6 +14,7 @@ import {
   Lock,
   Loader2,
   CheckCircle,
+  ClipboardList,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -433,6 +434,74 @@ export default function StudentManagerPage() {
                       </p>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Preference Generator Purchases */}
+            <div className="space-y-3 pt-2 border-t border-border">
+              <div className="flex items-center justify-between pb-1">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <CreditCard className="h-3.5 w-3.5 text-blue-600" /> Preference Generator (₹599)
+                </h3>
+              </div>
+              {!studentDetails?.preferenceGeneratorPurchases || studentDetails.preferenceGeneratorPurchases.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-2">No preference generator purchases.</p>
+              ) : (
+                <div className="space-y-2">
+                  {studentDetails.preferenceGeneratorPurchases.map((p: any) => (
+                    <div key={p.id} className="rounded-lg bg-indigo-50/50 border border-indigo-100 p-2.5 text-xs">
+                      <div className="flex items-center justify-between font-bold text-slate-800">
+                        <span>{p.round}</span>
+                        <span className="text-emerald-600 uppercase text-[10px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                          {p.status} (₹{p.amount || 599})
+                        </span>
+                      </div>
+                      <p className="text-xxs text-slate-600 mt-1">Saved Percentile: <strong className="text-slate-800">{p.savedPercentile}%</strong></p>
+                      <p className="text-xxs text-slate-400 font-mono mt-0.5">PayID: {p.paymentId || "—"}</p>
+                      <p className="text-xxs text-slate-400 text-right mt-0.5">
+                        {new Date(p.createdAt).toLocaleDateString("en-IN")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Preference List History */}
+            <div className="space-y-3 pt-2 border-t border-border">
+              <div className="flex items-center justify-between pb-1">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <ClipboardList className="h-3.5 w-3.5 text-indigo-600" /> Preference List History
+                </h3>
+              </div>
+              {!studentDetails?.preferenceGeneratorHistories || studentDetails.preferenceGeneratorHistories.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-2">No preference list generations yet.</p>
+              ) : (
+                <div className="max-h-52 overflow-y-auto space-y-2.5">
+                  {studentDetails.preferenceGeneratorHistories.map((h: any, idx: number) => {
+                    let branches: string[] = []
+                    let cities: string[] = []
+                    try { branches = JSON.parse(h.preferredBranches || "[]") } catch (e) {}
+                    try { cities = JSON.parse(h.preferredCities || "[]") } catch (e) {}
+
+                    return (
+                      <div key={h.id} className="rounded-lg bg-secondary/30 p-2.5 text-xs space-y-1">
+                        <div className="flex items-center justify-between font-bold">
+                          <span className="text-slate-900">Generation #{studentDetails.preferenceGeneratorHistories.length - idx}</span>
+                          <span className="text-xxs text-slate-500 font-normal">{new Date(h.createdAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 text-xxs text-slate-600">
+                          <p>Round: <strong className="text-slate-800">{h.round}</strong></p>
+                          <p>Percentile: <strong className="text-slate-800">{h.percentile}%</strong></p>
+                          <p className="col-span-2 truncate">Branches: <strong className="text-slate-800">{branches.join(" → ") || "All"}</strong></p>
+                          <p className="col-span-2 truncate">Cities: <strong className="text-slate-800">{cities.join(" → ") || "ANY"}</strong></p>
+                          <p>Colleges: <strong className="text-indigo-600">{h.collegesGenerated}</strong></p>
+                          <p>Downloaded PDF: <strong className={h.downloadedPdf ? "text-emerald-600" : "text-slate-400"}>{h.downloadedPdf ? "Yes" : "No"}</strong></p>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>

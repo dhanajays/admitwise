@@ -74,6 +74,27 @@ export async function POST(req: Request) {
     const previewCount = isPaid ? totalCount : Math.min(5, totalCount)
     const items = isPaid ? allItems : allItems.slice(0, 5)
 
+    // Save Generation History for authenticated student
+    if (session && session.user && session.user.id) {
+      try {
+        if (db && (db as any).preferenceGeneratorHistory) {
+          await db.preferenceGeneratorHistory.create({
+            data: {
+              userId: session.user.id,
+              percentile,
+              round,
+              preferredBranches: JSON.stringify(preferredBranches),
+              preferredCities: JSON.stringify(preferredCities),
+              collegesGenerated: totalCount,
+              downloadedPdf: false,
+            },
+          })
+        }
+      } catch (histErr) {
+        console.error("Failed to record preference generation history:", histErr)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       isPaid,

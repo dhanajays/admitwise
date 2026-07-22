@@ -100,6 +100,7 @@ model User {
   allIndiaDatasets        AllIndiaDataset[] @relation("UserAllIndiaDatasets")
   preferenceGeneratorDatasets PreferenceGeneratorDataset[] @relation("UserPreferenceDatasets")
   preferenceGeneratorPurchases PreferenceGeneratorPurchase[]
+  preferenceGeneratorHistories PreferenceGeneratorHistory[]
   notifications           Notification[]
   userProfile             UserProfile?
 }
@@ -536,4 +537,20 @@ model PreferenceGeneratorPurchase {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, round])
+}
+
+model PreferenceGeneratorHistory {
+  id                String   @id @default(cuid())
+  userId            String
+  percentile        Float
+  round             String   // "Round 1", "Round 2", "Round 3", "Round 4"
+  preferredBranches String   @db.Text // JSON array string
+  preferredCities   String   @db.Text // JSON array string
+  collegesGenerated Int      @default(0)
+  downloadedPdf     Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, round])
 }
