@@ -64,6 +64,14 @@ export default function AdminPreferenceDatasetPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
+
+      // 1. Frontend Debug Logs as requested
+      console.log("--------------------------------------------------")
+      console.log("[Frontend Debug] Selected filename:", file.name)
+      console.log("[Frontend Debug] file.size (bytes):", file.size)
+      console.log("[Frontend Debug] file.size (MB):", (file.size / (1024 * 1024)).toFixed(2))
+      console.log("--------------------------------------------------")
+
       if (file.size > MAX_FILE_SIZE_BYTES) {
         const sizeMB = (file.size / (1024 * 1024)).toFixed(2)
         setErrorMsg(`CSV exceeds 30 MB limit (${sizeMB} MB). Please reduce file size or split dataset.`)
@@ -97,6 +105,9 @@ export default function AdminPreferenceDatasetPage() {
     setUploadProgress(0)
     setErrorMsg(null)
     setSuccessMsg(null)
+
+    console.log("[Frontend Debug] Network Request: POST /api/admin/preference-dataset")
+    console.log("[Frontend Debug] Uploading file:", selectedFile.name, selectedFile.size, "bytes")
 
     const formData = new FormData()
     formData.append("file", selectedFile)

@@ -189,6 +189,7 @@ export async function POST(req: Request) {
     const fileSize = streamed.fileSize
     const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2)
 
+    console.log("📥 [Preference Dataset Upload] File Reached Backend")
     console.log(`File Name: ${fileName}`)
     console.log(`File Size: ${fileSize} bytes (${fileSizeMB} MB)`)
     console.log(`Content Type: ${contentType}`)
