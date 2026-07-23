@@ -1,5 +1,117 @@
-import { PreferenceDatasetLoader } from "./dataset-loader"
-import type { DatasetOptions, PreferenceInput, PreferenceResultItem } from "./types"
+export interface BranchGroup {
+  groupId: string
+  displayName: string
+  aliases: string[]
+}
+
+export const BRANCH_GROUPS: BranchGroup[] = [
+  {
+    groupId: "AI_DATA_SCIENCE",
+    displayName: "Artificial Intelligence & Data Science",
+    aliases: [
+      "Artificial Intelligence (AI) and Data Science",
+      "Artificial Intelligence and Data Science",
+      "Artificial Intelligence (AI & DS)",
+      "Artificial Intelligence & Data Science",
+      "AI & Data Science",
+      "Computer Science and Engineering(Data Science)",
+    ],
+  },
+  {
+    groupId: "AI_MACHINE_LEARNING",
+    displayName: "Artificial Intelligence & Machine Learning",
+    aliases: [
+      "Artificial Intelligence and Machine Learning",
+      "Artificial Intelligence (AI) and Machine Learning",
+      "Artificial Intelligence & Machine Learning",
+      "Artificial Intelligence (AIML)",
+      "AI & Machine Learning",
+      "Computer Science and Engineering(Artificial Intelligence and Machine Learning)",
+      "Artificial Intelligence",
+    ],
+  },
+  {
+    groupId: "COMPUTER_SCIENCE",
+    displayName: "Computer Science",
+    aliases: [
+      "Computer Science",
+      "Computer Science and Engineering",
+      "Computer Science & Engineering",
+    ],
+  },
+  {
+    groupId: "COMPUTER_ENGINEERING",
+    displayName: "Computer Engineering",
+    aliases: [
+      "Computer Engineering",
+    ],
+  },
+  {
+    groupId: "INFORMATION_TECHNOLOGY",
+    displayName: "Information Technology",
+    aliases: [
+      "Information Technology",
+      "Information Tech",
+    ],
+  },
+  {
+    groupId: "ELECTRONICS_TELECOMM",
+    displayName: "Electronics & Telecommunication Engineering",
+    aliases: [
+      "Electronics and Telecommunication Engg",
+      "Electronics & Telecommunication Engineering",
+      "Electronics and Communication Engineering",
+      "Electronics and Telecommunication Engineering",
+    ],
+  },
+  {
+    groupId: "MECHANICAL_ENGINEERING",
+    displayName: "Mechanical Engineering",
+    aliases: [
+      "Mechanical Engineering",
+      "Mechanical Engg",
+    ],
+  },
+  {
+    groupId: "ELECTRICAL_ENGINEERING",
+    displayName: "Electrical Engineering",
+    aliases: [
+      "Electrical Engineering",
+      "Electrical Engg[Electronics and Power]",
+      "Electrical and Electronics Engineering",
+    ],
+  },
+  {
+    groupId: "CIVIL_ENGINEERING",
+    displayName: "Civil Engineering",
+    aliases: [
+      "Civil Engineering",
+      "Civil Engg",
+    ],
+  },
+]
+
+export function normalizeBranchName(branchName: string): { groupId: string; displayName: string; matchedAliases: string[] } {
+  const norm = branchName.trim().toLowerCase()
+
+  for (const group of BRANCH_GROUPS) {
+    for (const alias of group.aliases) {
+      if (alias.trim().toLowerCase() === norm) {
+        return {
+          groupId: group.groupId,
+          displayName: group.displayName,
+          matchedAliases: group.aliases,
+        }
+      }
+    }
+  }
+
+  return {
+    groupId: `BRANCH_${branchName.trim().toUpperCase().replace(/[^A-Z0-9]/g, "_")}`,
+    displayName: branchName.trim(),
+    matchedAliases: [branchName.trim()],
+  }
+}
 
 export class PreferenceGeneratorService {
   /**
@@ -23,8 +135,8 @@ export class PreferenceGeneratorService {
       const citiesSet = new Set<string>()
 
       for (const item of res.records) {
-        if (item.branchName) branchesSet.add(item.branchName)
-        if (item.city) citiesSet.add(item.city)
+        if (item.branchName) branchesSet.add(item.branchName.trim())
+        if (item.city) citiesSet.add(item.city.trim())
       }
 
       const branches = Array.from(branchesSet).sort((a, b) => a.localeCompare(b))
@@ -53,7 +165,7 @@ export class PreferenceGeneratorService {
   }
 
   /**
-   * Core Preference List Generation Algorithm following student percentile, CAP round, branch priorities, and city priorities.
+   * Core Preference List Generation Algorithm following student percentile, CAP round, branch priorities (grouped by aliases), and city priorities.
    */
   static async generatePreferenceList(
     input: PreferenceInput
@@ -82,7 +194,6 @@ export class PreferenceGeneratorService {
     // For each college_code + branch_code, keep GOPENS first. Fallback to LOPENS if no GOPENS exists.
     const collegeBranchMap = new Map<string, typeof rawCutoffs[0]>()
 
-    // Step 2A: Add GOPENS records first
     for (const item of rawCutoffs) {
       const key = `${item.collegeCode}_${item.branchCode}`
       if (item.categoryCodeRaw === "GOPENS") {
@@ -90,7 +201,6 @@ export class PreferenceGeneratorService {
       }
     }
 
-    // Step 2B: Fallback to LOPENS if no GOPENS record exists for that college-branch
     for (const item of rawCutoffs) {
       const key = `${item.collegeCode}_${item.branchCode}`
       if (item.categoryCodeRaw === "LOPENS" && !collegeBranchMap.has(key)) {
@@ -101,9 +211,6 @@ export class PreferenceGeneratorService {
     const filteredRecords = Array.from(collegeBranchMap.values())
 
     // 3. Stage Ranges (Dream, Target, Safe)
-    // Dream: > percentile and <= 100
-    // Target: <= percentile and >= percentile - 5
-    // Safe: < percentile - 5 and >= percentile - 15
     const targetMin = Math.max(0, percentile - 5)
     const safeMin = Math.max(0, percentile - 15)
 
@@ -114,8 +221,19 @@ export class PreferenceGeneratorService {
       return null
     }
 
-    // Normalize user branch & city inputs
-    const userBranches = preferredBranches.map((b) => b.trim())
+    // 4. Normalize & Deduplicate Student Branch Priorities into Branch Groups
+    const selectedGroupMap = new Map<string, { groupId: string; displayName: string; matchedAliases: string[] }>()
+    const orderedBranchGroups: { groupId: string; displayName: string; matchedAliases: string[] }[] = []
+
+    for (const userBranch of preferredBranches) {
+      const groupInfo = normalizeBranchName(userBranch)
+      if (!selectedGroupMap.has(groupInfo.groupId)) {
+        selectedGroupMap.set(groupInfo.groupId, groupInfo)
+        orderedBranchGroups.push(groupInfo)
+      }
+    }
+
+    // Normalize City Inputs
     const isAnyCity =
       !preferredCities ||
       preferredCities.length === 0 ||
@@ -125,31 +243,31 @@ export class PreferenceGeneratorService {
 
     const stages: ("Dream" | "Target" | "Safe")[] = ["Dream", "Target", "Safe"]
     const resultList: PreferenceResultItem[] = []
-    const addedIds = new Set<string>()
+    const addedKeys = new Set<string>()
 
-    // Exact Branch Matching Rule: Only match exact branch name (case-insensitive & trimmed)
-    const isExactBranchMatch = (actualBranch: string, targetBranch: string) => {
-      return actualBranch.trim().toLowerCase() === targetBranch.trim().toLowerCase()
-    }
-
-    // 4. Algorithm Ordering Execution
+    // 5. Algorithm Execution with Branch Group Aliases
     for (const stage of stages) {
       if (isAnyCity) {
-        // Case 1: "ANY" City Selected
-        // Hierarchy: Stage -> Branch Priority -> Closing Percentile DESC
-        for (const branchPref of userBranches) {
+        // Hierarchy: Stage -> Branch Group Priority -> Closing Percentile DESC
+        for (const group of orderedBranchGroups) {
+          const aliasNormSet = new Set(group.matchedAliases.map((a) => a.trim().toLowerCase()))
+
           const bucket = filteredRecords.filter((rec) => {
             const stageTag = getStageTag(rec.closingPercentile)
             if (stageTag !== stage) return false
-            if (!isExactBranchMatch(rec.branchName, branchPref)) return false
-            return !addedIds.has(rec.id)
+            if (!aliasNormSet.has(rec.branchName.trim().toLowerCase())) return false
+
+            const dedupeKey = `${stage}_${rec.collegeCode}_${group.groupId}`
+            return !addedKeys.has(dedupeKey)
           })
 
           // Sort bucket by closingPercentile DESC
           bucket.sort((a, b) => b.closingPercentile - a.closingPercentile)
 
           for (const item of bucket) {
-            addedIds.add(item.id)
+            const dedupeKey = `${stage}_${item.collegeCode}_${group.groupId}`
+            addedKeys.add(dedupeKey)
+
             resultList.push({
               id: item.id,
               collegeCode: item.collegeCode,
@@ -168,23 +286,28 @@ export class PreferenceGeneratorService {
           }
         }
       } else {
-        // Case 2: Specific Cities Selected
-        // Hierarchy: Stage -> City Priority -> Branch Priority -> Closing Percentile DESC
+        // Hierarchy: Stage -> City Priority -> Branch Group Priority -> Closing Percentile DESC
         for (const cityPref of userCities) {
-          for (const branchPref of userBranches) {
+          for (const group of orderedBranchGroups) {
+            const aliasNormSet = new Set(group.matchedAliases.map((a) => a.trim().toLowerCase()))
+
             const bucket = filteredRecords.filter((rec) => {
               const stageTag = getStageTag(rec.closingPercentile)
               if (stageTag !== stage) return false
               if (rec.city.trim().toLowerCase() !== cityPref.toLowerCase()) return false
-              if (!isExactBranchMatch(rec.branchName, branchPref)) return false
-              return !addedIds.has(rec.id)
+              if (!aliasNormSet.has(rec.branchName.trim().toLowerCase())) return false
+
+              const dedupeKey = `${stage}_${rec.collegeCode}_${group.groupId}`
+              return !addedKeys.has(dedupeKey)
             })
 
             // Sort bucket by closingPercentile DESC
             bucket.sort((a, b) => b.closingPercentile - a.closingPercentile)
 
             for (const item of bucket) {
-              addedIds.add(item.id)
+              const dedupeKey = `${stage}_${item.collegeCode}_${group.groupId}`
+              addedKeys.add(dedupeKey)
+
               resultList.push({
                 id: item.id,
                 collegeCode: item.collegeCode,
