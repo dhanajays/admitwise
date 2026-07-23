@@ -41,64 +41,71 @@ export async function POST(req: Request) {
         const slotStats = await getPreferenceSlotStats(session.user.id)
         isIncludedInPlan = slotStats.isIncludedInPlan
 
-        // Check if percentile matches an existing saved percentile profile (within 0.001 precision)
-        const existingPercentile = slotStats.savedPercentiles.find(
-          (sp) => Math.abs(sp - percentile) < 0.001
-        )
+        const isRoundAllowed =
+          slotStats.isIncludedInPlan ||
+          slotStats.allowedRounds.includes(round) ||
+          slotStats.purchases.some((p: any) => p.round === "ALL" || p.round === round)
 
-        if (existingPercentile !== undefined) {
-          // Reusing existing Saved Percentile Profile!
-          const isFullPlan = slotStats.currentPlan === "premium" || slotStats.currentPlan === "elite"
-          if (isFullPlan) {
-            // Premium / Elite Plan: valid for ALL CAP Rounds (Round 1–4) with unlimited regenerations!
+        if (!isRoundAllowed) {
+          isPaid = false
+        } else {
+          // Check if percentile matches an existing saved percentile profile
+          const existingPercentile = slotStats.savedPercentiles.find(
+            (sp) => Math.abs(sp - percentile) < 0.001
+          )
+
+          if (existingPercentile !== undefined) {
             isPaid = true
             percentile = existingPercentile
             savedPercentile = existingPercentile
-          } else {
-            // Standalone ₹599 purchase: check if valid for target CAP round
-            const matchingPurchase = slotStats.purchases?.find(
-              (p: any) =>
-                (p.round === "ALL" || p.round === round) &&
-                (p.savedPercentile === null || Math.abs(p.savedPercentile - percentile) < 0.001)
-            )
-
-            if (matchingPurchase || slotStats.purchasedSlots > 0) {
-              isPaid = true
-              percentile = existingPercentile
-              savedPercentile = existingPercentile
-            } else {
-              isPaid = false
-            }
-          }
-        } else if (slotStats.totalMaxSlots === 0) {
-          // Free user without any plan or purchase
-          isPaid = false
-        } else if (slotStats.usedSlots < slotStats.totalMaxSlots) {
-          // New Percentile Profile & Slot Available! Save slot into database
-          if (db && (db as any).preferenceSavedPercentile) {
-            try {
-              await db.preferenceSavedPercentile.upsert({
-                where: {
-                  userId_savedPercentile: {
+          } else if (slotStats.totalMaxSlots === 0) {
+            isPaid = false
+          } else if (slotStats.usedSlots < slotStats.totalMaxSlots) {
+            // New Percentile Profile & Slot Available! Save slot into database
+            if (db && (db as any).preferenceSavedPercentile) {
+              try {
+                await db.preferenceSavedPercentile.upsert({
+                  where: {
+                    userId_savedPercentile: {
+                      userId: session.user.id,
+                      savedPercentile: percentile,
+                    },
+                  },
+                  create: {
                     userId: session.user.id,
                     savedPercentile: percentile,
                   },
-                },
-                create: {
-                  userId: session.user.id,
-                  savedPercentile: percentile,
-                },
-                update: {},
-              })
-            } catch (saveErr) {
-              console.warn("Could not save to preferenceSavedPercentile:", saveErr)
+                  update: {},
+                })
+              } catch (saveErr) {
+                console.warn("Could not save to preferenceSavedPercentile:", saveErr)
+              }
             }
+            isPaid = true
+            savedPercentile = percentile
+          } else if (slotStats.purchasedSlots > 0 && slotStats.savedPercentiles.length > 0) {
+            // If user has 1 purchased slot and entering a new percentile, update/sync their saved percentile slot
+            const oldPercentile = slotStats.savedPercentiles[0]
+            if (db && (db as any).preferenceSavedPercentile && oldPercentile !== undefined) {
+              try {
+                await db.preferenceSavedPercentile.deleteMany({
+                  where: { userId: session.user.id },
+                })
+                await db.preferenceSavedPercentile.create({
+                  data: {
+                    userId: session.user.id,
+                    savedPercentile: percentile,
+                  },
+                })
+              } catch (e) {
+                console.warn("Could not update single slot saved percentile:", e)
+              }
+            }
+            isPaid = true
+            savedPercentile = percentile
+          } else {
+            isPaid = false
           }
-          isPaid = true
-          savedPercentile = percentile
-        } else {
-          // All slots EXHAUSTED! Block new percentile profile creation
-          isPaid = false
         }
       } catch (e) {
         console.error("Error evaluating preference slot stats in generate API:", e)
