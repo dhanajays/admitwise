@@ -11,6 +11,9 @@ const generateSchema = z.object({
   round: z.string(),
   preferredBranches: z.array(z.string()).min(1, "Select at least one branch"),
   preferredCities: z.array(z.string()).min(1, "Select at least one city"),
+  category: z.string().optional().default("OPEN"),
+  gender: z.string().optional().default("Male"),
+  pwd: z.string().optional().default("No"),
 })
 
 export async function POST(req: Request) {
@@ -25,7 +28,7 @@ export async function POST(req: Request) {
       )
     }
 
-    let { percentile, round, preferredBranches, preferredCities } = parsed.data
+    let { percentile, round, preferredBranches, preferredCities, category, gender, pwd } = parsed.data
 
     const session = (await getServerSession(authOptions)) as CustomSession | null
     let isPaid = false
@@ -94,6 +97,9 @@ export async function POST(req: Request) {
       round,
       preferredBranches,
       preferredCities,
+      category,
+      gender,
+      pwd,
     })
 
     if (result.error) {

@@ -35,10 +35,14 @@ export default function PreferenceListGeneratorPage() {
   const [capRound, setCapRound] = useState("Round 1")
   const [preferredBranches, setPreferredBranches] = useState<string[]>([])
   const [preferredCities, setPreferredCities] = useState<string[]>(["Pune", "Mumbai"])
+  const [category, setCategory] = useState("OPEN")
+  const [gender, setGender] = useState("Male")
+  const [pwd, setPwd] = useState("No")
 
   // Dataset Options (fetched dynamically)
   const [availableBranches, setAvailableBranches] = useState<string[]>([])
   const [availableCities, setAvailableCities] = useState<string[]>([])
+  const [availableCategories, setAvailableCategories] = useState<string[]>([])
   const [datasetInfo, setDatasetInfo] = useState<any>(null)
   const [loadingOptions, setLoadingOptions] = useState(true)
 
@@ -149,6 +153,7 @@ export default function PreferenceListGeneratorPage() {
             setErrorMsg(null)
             setAvailableBranches(data.branches || [])
             setAvailableCities(data.cities || [])
+            setAvailableCategories(data.categories || [])
             setDatasetInfo(data.datasetInfo || null)
             console.log("[Frontend fetchOptions] Received Branches:", (data.branches || []).length)
             console.log("[Frontend fetchOptions] Received Cities:", (data.cities || []).length)
@@ -261,6 +266,9 @@ export default function PreferenceListGeneratorPage() {
           round: capRound,
           preferredBranches,
           preferredCities,
+          category,
+          gender,
+          pwd,
         }),
       })
 
@@ -414,6 +422,9 @@ export default function PreferenceListGeneratorPage() {
           round: capRound,
           preferredBranches,
           preferredCities,
+          category,
+          gender,
+          pwd,
         }),
       })
 
@@ -580,6 +591,49 @@ export default function PreferenceListGeneratorPage() {
                     {r}
                   </option>
                 ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Row 2: Category, Gender, PwD */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* 4. Category */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-medium text-slate-800 shadow-2xs transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              >
+                {(availableCategories.length > 0 ? availableCategories : ["OPEN","OBC","SC","ST","EWS","NT-A","NT-B","NT-C","NT-D","SEBC","TFWS","ORPHAN","MI"]).map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 5. Gender */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Gender</label>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-medium text-slate-800 shadow-2xs transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+
+            {/* 6. PwD Status */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">PwD Status</label>
+              <select
+                value={pwd}
+                onChange={(e) => setPwd(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-medium text-slate-800 shadow-2xs transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option value="No">No</option>
+                <option value="Yes">Yes (PwD)</option>
               </select>
             </div>
           </div>

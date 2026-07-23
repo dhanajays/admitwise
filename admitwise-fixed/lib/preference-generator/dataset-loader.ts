@@ -13,6 +13,7 @@ export interface PreferenceDatasetRow {
   seatSection: string
   stage: string
   categoryCodeRaw: string
+  category: string
   gender: string
   disability: string
   defenseQuota: string
@@ -200,8 +201,9 @@ export class PreferenceDatasetLoader {
         const seatSection = String(row.seat_section || row.seatsection || "").trim()
         const stage = String(row.stage || "").trim()
         const categoryCodeRaw = String(
-          row.category_code_raw || row.category_code || row.categorycode || row.category || ""
+          row.category_code_raw || row.category_code || row.categorycode || ""
         ).trim()
+        const category = String(row.category || "").trim()
         const gender = String(row.gender || "").trim()
         const disability = String(row.disability || "No").trim()
         const defenseQuota = String(
@@ -226,6 +228,7 @@ export class PreferenceDatasetLoader {
           seatSection,
           stage,
           categoryCodeRaw,
+          category,
           gender,
           disability,
           defenseQuota,

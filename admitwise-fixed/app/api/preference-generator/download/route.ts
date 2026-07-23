@@ -11,6 +11,9 @@ const downloadSchema = z.object({
   round: z.string(),
   preferredBranches: z.array(z.string()).min(1),
   preferredCities: z.array(z.string()).min(1),
+  category: z.string().optional().default("OPEN"),
+  gender: z.string().optional().default("Male"),
+  pwd: z.string().optional().default("No"),
 })
 
 export async function POST(req: Request) {
@@ -26,7 +29,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400 })
     }
 
-    let { percentile, round, preferredBranches, preferredCities } = parsed.data
+    let { percentile, round, preferredBranches, preferredCities, category, gender, pwd } = parsed.data
 
     // Check if user is subscriber or purchased round
     let isPaid = false
@@ -66,13 +69,16 @@ export async function POST(req: Request) {
       round,
       preferredBranches,
       preferredCities,
+      category,
+      gender,
+      pwd,
     })
 
     const items = result.items || []
 
     const doc = await generatePreferencePDF(
       items,
-      { percentile, round, preferredBranches, preferredCities },
+      { percentile, round, preferredBranches, preferredCities, category, gender, pwd },
       session.user.name
     )
 

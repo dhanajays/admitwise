@@ -3,6 +3,9 @@ export interface PreferenceInput {
   round: string // "Round 1" | "Round 2" | "Round 3" | "Round 4"
   preferredBranches: string[]
   preferredCities: string[] // e.g. ["ANY"] or ["Pune", "Mumbai"]
+  category?: string // "OPEN" | "OBC" | "SC" | "ST" | etc.
+  gender?: string   // "Male" | "Female"
+  pwd?: string      // "No" | "Yes"
 }
 
 export interface PreferenceResultItem {
@@ -16,7 +19,7 @@ export interface PreferenceResultItem {
   homeUniversity: string
   closingPercentile: number
   closingRank: number
-  categoryUsed: string // "GOPENS" | "LOPENS"
+  categoryUsed: string // "GOPENS" | "LOPENS" | category code
   stageTag: "Dream" | "Target" | "Safe"
   priorityIndex: number
 }
@@ -24,6 +27,7 @@ export interface PreferenceResultItem {
 export interface DatasetOptions {
   branches: string[]
   cities: string[]
+  categories: string[]
   datasetInfo: {
     id: string
     round: string

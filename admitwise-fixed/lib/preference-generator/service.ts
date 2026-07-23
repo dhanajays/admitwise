@@ -154,13 +154,15 @@ export class PreferenceGeneratorService {
         }
       }
 
-      // Extract unique branches and cities
+      // Extract unique branches, cities, and categories
       const branchesSet = new Set<string>()
       const citiesSet = new Set<string>()
+      const categoriesSet = new Set<string>()
 
       for (const item of res.records) {
         if (item.branchName) branchesSet.add(item.branchName.trim())
         if (item.city) citiesSet.add(item.city.trim())
+        if (item.category) categoriesSet.add(item.category.trim())
       }
 
       const branches = Array.from(branchesSet).sort((a, b) => a.localeCompare(b))
@@ -179,9 +181,20 @@ export class PreferenceGeneratorService {
         }
       }
 
+      // Preserve preferred category order
+      const CATEGORY_ORDER = ["OPEN", "OBC", "SC", "ST", "EWS", "NT-A", "NT-B", "NT-C", "NT-D", "SEBC", "TFWS", "ORPHAN", "MI"]
+      const categories: string[] = []
+      for (const cat of CATEGORY_ORDER) {
+        if (categoriesSet.has(cat)) categories.push(cat)
+      }
+      for (const cat of Array.from(categoriesSet).sort()) {
+        if (!categories.includes(cat)) categories.push(cat)
+      }
+
       return {
         branches,
         cities,
+        categories,
         datasetInfo: {
           id: res.fileName,
           round: res.roundName,
@@ -195,6 +208,7 @@ export class PreferenceGeneratorService {
       return {
         branches: [],
         cities: [],
+        categories: [],
         datasetInfo: null,
         error: "Failed to load options for the selected CAP Round.",
       }
@@ -209,39 +223,75 @@ export class PreferenceGeneratorService {
   ): Promise<{ items: PreferenceResultItem[]; error?: string }> {
     const { percentile, round, preferredBranches, preferredCities } = input
 
+    // Destructure new optional filters (defaults: OPEN, Male, No)
+    const reqCategory = (input.category || "OPEN").trim().toUpperCase()
+    const reqGender   = (input.gender || "Male").trim().toLowerCase()
+    const reqPwd      = (input.pwd || "No").trim().toLowerCase()
+
     // 1. Load CSV dataset directly from the /dataset folder for the selected CAP Round
     const res = PreferenceDatasetLoader.loadDatasetForRound(round)
     if (!res.success) {
       return { items: [], error: res.error }
     }
 
-    // 2. Category Filtering Rule:
-    // Consider GOPENS & LOPENS in range [0 -> 100] percentile
-    const rawCutoffs = res.records.filter(
-      (r) =>
-        (r.categoryCodeRaw === "GOPENS" || r.categoryCodeRaw === "LOPENS") &&
-        r.closingPercentile >= 0 &&
-        r.closingPercentile <= 100
-    )
+    // 2. Apply Category, Gender, and PwD filters before passing into the ranking engine
+    const rawCutoffs = res.records.filter((r) => {
+      // Must have valid closing percentile
+      if (r.closingPercentile < 0 || r.closingPercentile > 100) return false
+
+      // --- Category Filter ---
+      // Match candidate's own category rows, plus OPEN rows (all candidates are eligible for OPEN seats)
+      const rCat = r.category.trim().toUpperCase()
+      const catMatch = rCat === reqCategory || (reqCategory !== "OPEN" && rCat === "OPEN")
+      if (!catMatch) return false
+
+      // --- Gender Filter ---
+      // Dataset values: "Not Specified" (gender-neutral/open), "Female" (female-only)
+      // Male   → eligible for "Not Specified" seats only
+      // Female → eligible for "Female" and "Not Specified" seats
+      const rGen = r.gender.trim().toLowerCase()
+      if (reqGender === "male") {
+        if (rGen !== "not specified" && rGen !== "male" && rGen !== "") return false
+      }
+      // Female candidates: all genders pass (Female + Not Specified)
+
+      // --- PwD Filter ---
+      // No  → only non-PwD seats
+      // Yes → PwD and non-PwD seats (PwD candidate eligible for both)
+      const rDis = r.disability.trim().toLowerCase()
+      if (reqPwd === "no") {
+        if (rDis !== "no" && rDis !== "") return false
+      }
+      // Yes: both pass
+
+      return true
+    })
 
     if (!rawCutoffs || rawCutoffs.length === 0) {
       return { items: [] }
     }
 
-    // For each college_code + branch_code, keep GOPENS first. Fallback to LOPENS if no GOPENS exists.
+    // For each college_code + branch_code, keep the candidate's specific category row first.
+    // If multiple rows exist for the same college+branch, prefer the candidate's exact category
+    // over a generic OPEN row, and break ties by higher closingPercentile.
     const collegeBranchMap = new Map<string, typeof rawCutoffs[0]>()
 
     for (const item of rawCutoffs) {
       const key = `${item.collegeCode}_${item.branchCode}`
-      if (item.categoryCodeRaw === "GOPENS") {
+      const existing = collegeBranchMap.get(key)
+      if (!existing) {
         collegeBranchMap.set(key, item)
-      }
-    }
-
-    for (const item of rawCutoffs) {
-      const key = `${item.collegeCode}_${item.branchCode}`
-      if (item.categoryCodeRaw === "LOPENS" && !collegeBranchMap.has(key)) {
-        collegeBranchMap.set(key, item)
+      } else {
+        const existingCat = existing.category.trim().toUpperCase()
+        const itemCat = item.category.trim().toUpperCase()
+        // Prefer candidate's exact category over OPEN fallback
+        const itemIsExact = itemCat === reqCategory
+        const existingIsExact = existingCat === reqCategory
+        if (itemIsExact && !existingIsExact) {
+          collegeBranchMap.set(key, item)
+        } else if (itemIsExact === existingIsExact && item.closingPercentile > existing.closingPercentile) {
+          collegeBranchMap.set(key, item)
+        }
       }
     }
 
