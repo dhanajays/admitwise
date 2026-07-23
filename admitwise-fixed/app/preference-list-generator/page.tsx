@@ -515,8 +515,8 @@ export default function PreferenceListGeneratorPage() {
             )}
           </div>
 
-          {/* Saved Percentile Slots Bar — only for Premium / Elite users (hasAccess with included slots) */}
-          {session?.user && slotStats.isIncludedInPlan && slotStats.totalMaxSlots > 0 && (
+          {/* Saved Percentile Slots Bar */}
+          {session?.user && (slotStats.hasAccess || slotStats.savedPercentiles.length > 0) && (
             <div className="rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-slate-50 border border-blue-100 p-4 space-y-3 shadow-2xs">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-blue-100/80 pb-2.5">
                 <div>
@@ -525,16 +525,22 @@ export default function PreferenceListGeneratorPage() {
                     Saved Percentiles ({slotStats.usedSlots} / {slotStats.totalMaxSlots} Slots Used)
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Each saved percentile profile unlocks unlimited regenerations across all CAP Rounds.
+                    {slotStats.usedSlots >= slotStats.totalMaxSlots && slotStats.totalMaxSlots > 0 ? (
+                      <span className="text-amber-800 font-semibold">
+                        All included saved percentile slots are used. Existing saved percentiles can still be reused unlimited times. Purchase +1 Saved Percentile (₹599) to save a new percentile.
+                      </span>
+                    ) : (
+                      "Each saved percentile profile unlocks unlimited regenerations across all CAP Rounds."
+                    )}
                   </p>
                 </div>
 
-                {slotStats.usedSlots >= slotStats.totalMaxSlots ? (
-                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100/90 px-2.5 py-1 rounded-full border border-amber-200">
+                {slotStats.usedSlots >= slotStats.totalMaxSlots && slotStats.totalMaxSlots > 0 ? (
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100/90 px-2.5 py-1 rounded-full border border-amber-200 shrink-0">
                     All {slotStats.totalMaxSlots} Slots Used
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2.5 py-1 rounded-full border border-emerald-200">
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0">
                     {slotStats.remainingSlots} Slot{slotStats.remainingSlots === 1 ? "" : "s"} Available
                   </span>
                 )}
@@ -562,7 +568,7 @@ export default function PreferenceListGeneratorPage() {
                   )
                 })}
 
-                {/* +Buy slot button ONLY when ALL included slots are consumed */}
+                {/* +Buy 1 Saved Percentile button ONLY when ALL included slots are consumed */}
                 {slotStats.usedSlots >= slotStats.totalMaxSlots && slotStats.totalMaxSlots > 0 && (
                   <button
                     type="button"
@@ -854,10 +860,18 @@ export default function PreferenceListGeneratorPage() {
 
                     <div className="space-y-1.5">
                       <h3 className="text-xl sm:text-2xl font-extrabold text-white">
-                        🔒 Unlock Remaining {totalCount - 5} Colleges
+                        {slotStats.usedSlots >= slotStats.totalMaxSlots && slotStats.totalMaxSlots > 0 ? (
+                          <>🔒 Saved Percentile Limit Reached</>
+                        ) : (
+                          <>🔒 Unlock Remaining {totalCount - 5} Colleges</>
+                        )}
                       </h3>
                       <p className="text-sm text-blue-200 max-w-md">
-                        Your personalised preference list has been generated. Unlock the complete report.
+                        {slotStats.usedSlots >= slotStats.totalMaxSlots && slotStats.totalMaxSlots > 0 ? (
+                          <>You have used all {slotStats.totalMaxSlots} saved percentile slots included in your {slotStats.planName || "account"}. Purchase +1 Saved Percentile (₹599) to save this new percentile profile and unlock full preference results.</>
+                        ) : (
+                          <>Your personalised preference list has been generated. Unlock the complete report.</>
+                        )}
                       </p>
                     </div>
 

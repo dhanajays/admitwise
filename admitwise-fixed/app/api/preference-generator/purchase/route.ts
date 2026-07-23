@@ -24,12 +24,19 @@ export async function getPreferenceSlotStats(userId: string) {
 
   // 2. Purchased Add-on Slots (+1 per ₹599 purchase)
   let purchasedSlots = 0
+  let purchasesList: { id: string; round: string; savedPercentile: number | null }[] = []
+
   if (db && (db as any).preferenceGeneratorPurchase) {
     try {
       const purchases = await db.preferenceGeneratorPurchase.findMany({
         where: { userId, status: "Paid" },
       })
       purchasedSlots = purchases.length
+      purchasesList = purchases.map((p: any) => ({
+        id: p.id,
+        round: p.round || "ALL",
+        savedPercentile: p.savedPercentile ?? null,
+      }))
     } catch (e) {
       console.error("Error fetching preference generator purchases:", e)
     }
@@ -51,22 +58,15 @@ export async function getPreferenceSlotStats(userId: string) {
     }
   }
 
-  // Fallback: If no preferenceSavedPercentile records yet, collect from purchases or predictor profiles
-  if (savedPercentiles.length === 0 && purchasedSlots > 0 && db && (db as any).preferenceGeneratorPurchase) {
-    try {
-      const purchases = await db.preferenceGeneratorPurchase.findMany({
-        where: { userId, status: "Paid" },
-      })
-      const pSet = new Set<number>()
-      for (const p of purchases) {
-        if (p.savedPercentile !== null && p.savedPercentile !== undefined) {
-          pSet.add(p.savedPercentile)
-        }
+  // Fallback: If no preferenceSavedPercentile records yet, collect from purchases
+  if (savedPercentiles.length === 0 && purchasedSlots > 0 && purchasesList.length > 0) {
+    const pSet = new Set<number>()
+    for (const p of purchasesList) {
+      if (p.savedPercentile !== null && p.savedPercentile !== undefined) {
+        pSet.add(p.savedPercentile)
       }
-      savedPercentiles = Array.from(pSet)
-    } catch (e) {
-      console.error("Error deriving saved percentiles from purchases:", e)
     }
+    savedPercentiles = Array.from(pSet)
   }
 
   const usedSlots = savedPercentiles.length
@@ -85,6 +85,7 @@ export async function getPreferenceSlotStats(userId: string) {
     hasAccess,
     isIncludedInPlan,
     savedPercentiles,
+    purchases: purchasesList,
   }
 }
 

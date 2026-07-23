@@ -47,22 +47,48 @@ export async function POST(req: Request) {
         )
 
         if (existingPercentile !== undefined) {
-          // Reusing existing Saved Percentile Profile → Unlimited generations across ALL CAP rounds!
-          isPaid = true
-          percentile = existingPercentile
-          savedPercentile = existingPercentile
+          // Reusing existing Saved Percentile Profile!
+          const isFullPlan = slotStats.currentPlan === "premium" || slotStats.currentPlan === "elite"
+          if (isFullPlan) {
+            // Premium / Elite Plan: valid for ALL CAP Rounds (Round 1–4) with unlimited regenerations!
+            isPaid = true
+            percentile = existingPercentile
+            savedPercentile = existingPercentile
+          } else {
+            // Standalone ₹599 purchase: check if valid for target CAP round
+            const matchingPurchase = slotStats.purchases?.find(
+              (p: any) =>
+                (p.round === "ALL" || p.round === round) &&
+                (p.savedPercentile === null || Math.abs(p.savedPercentile - percentile) < 0.001)
+            )
+
+            if (matchingPurchase || slotStats.purchasedSlots > 0) {
+              isPaid = true
+              percentile = existingPercentile
+              savedPercentile = existingPercentile
+            } else {
+              isPaid = false
+            }
+          }
         } else if (slotStats.totalMaxSlots === 0) {
-          // No plan at all — guest/free user. Show 5 preview, no slot saving.
+          // Free user without any plan or purchase
           isPaid = false
         } else if (slotStats.usedSlots < slotStats.totalMaxSlots) {
-          // Slots available — save new percentile profile and unlock full results
+          // New Percentile Profile & Slot Available! Save slot into database
           if (db && (db as any).preferenceSavedPercentile) {
             try {
-              await db.preferenceSavedPercentile.create({
-                data: {
+              await db.preferenceSavedPercentile.upsert({
+                where: {
+                  userId_savedPercentile: {
+                    userId: session.user.id,
+                    savedPercentile: percentile,
+                  },
+                },
+                create: {
                   userId: session.user.id,
                   savedPercentile: percentile,
                 },
+                update: {},
               })
             } catch (saveErr) {
               console.warn("Could not save to preferenceSavedPercentile:", saveErr)
@@ -71,7 +97,7 @@ export async function POST(req: Request) {
           isPaid = true
           savedPercentile = percentile
         } else {
-          // All slots exhausted — show 5 preview so user can see value, then upsell +1 slot
+          // All slots EXHAUSTED! Block new percentile profile creation
           isPaid = false
         }
       } catch (e) {
