@@ -385,11 +385,16 @@ export default function PreferenceListGeneratorPage() {
           }),
         })
 
+        const onPaymentSuccess = async () => {
+          setIsPaid(true)
+          setSavedPercentile(currentPerc)
+          await checkPurchase()
+          await handleGenerate(currentPerc)
+        }
+
         if (!verifyRes.ok) throw new Error("Payment verification failed.")
 
-        setIsPaid(true)
-        setSavedPercentile(currentPerc)
-        await handleGenerate(currentPerc)
+        await onPaymentSuccess()
         setPurchasing(false)
         return
       }
@@ -432,6 +437,7 @@ export default function PreferenceListGeneratorPage() {
 
             setIsPaid(true)
             setSavedPercentile(currentPerc)
+            await checkPurchase()
             await handleGenerate(currentPerc)
           } catch (err: any) {
             setErrorMsg(err.message || "Payment verification failed")

@@ -47,7 +47,7 @@ export async function POST(req: Request) {
         const purchase = await db.preferenceGeneratorPurchase.create({
           data: {
             userId,
-            round: round || "ALL",
+            round: round || "Round 1",
             savedPercentile: percentile,
             paymentId: razorpay_payment_id,
             status: "Paid",
