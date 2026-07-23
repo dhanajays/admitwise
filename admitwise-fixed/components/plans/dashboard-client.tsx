@@ -113,7 +113,8 @@ export function DashboardClient() {
     )
   }
 
-  const subscribed = isSubscribed()
+  const hasPrefAccess = !!(prefPurchase && prefPurchase.hasAccess)
+  const subscribed = isSubscribed() || hasPrefAccess
   const planDetails = PLANS.find((p) => p.id === sub.plan)
 
   const stats = calculateUnifiedStats(
@@ -165,11 +166,17 @@ export function DashboardClient() {
           <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-5">
             <div>
               <h2 className="font-heading text-2xl font-bold text-slate-900">
-                {(sub.plan as string) === "free" ? "Free Plan" : (planDetails?.name ?? sub.plan)}
+                {(sub.plan as string) === "free"
+                  ? hasPrefAccess
+                    ? prefPurchase?.planName || "Preference List Generator (₹599)"
+                    : "Free Plan"
+                  : (planDetails?.name ?? sub.plan)}
               </h2>
-              {planDetails?.price !== undefined && (
+              {planDetails?.price !== undefined ? (
                 <p className="mt-1 text-lg font-bold text-slate-700">₹{planDetails.price}</p>
-              )}
+              ) : hasPrefAccess && (sub.plan as string) === "free" ? (
+                <p className="mt-1 text-lg font-bold text-slate-700">₹599</p>
+              ) : null}
             </div>
             <span className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm">
               Active
