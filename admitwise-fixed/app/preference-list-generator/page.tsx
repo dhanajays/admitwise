@@ -46,6 +46,8 @@ export default function PreferenceListGeneratorPage() {
   const [isIncludedInPlan, setIsIncludedInPlan] = useState(false)
   const [planName, setPlanName] = useState<string>("")
   const [savedPercentile, setSavedPercentile] = useState<number | null>(null)
+  const [allPurchases, setAllPurchases] = useState<any[]>([])
+  const [predictorProfiles, setPredictorProfiles] = useState<number[]>([])
   const [results, setResults] = useState<PreferenceResultItem[]>([])
   const [totalCount, setTotalCount] = useState<number>(0)
   const [hasGenerated, setHasGenerated] = useState(false)
@@ -80,7 +82,30 @@ export default function PreferenceListGeneratorPage() {
     }
   }, [])
 
-  // 2. Fetch Dynamic Branches & Cities for selected CAP Round
+  // 2. Fetch Predictor Saved Percentile Profiles
+  useEffect(() => {
+    async function fetchPredictorProfiles() {
+      if (!session) return
+      try {
+        const res = await fetch("/api/subscription")
+        if (res.ok) {
+          const data = await res.json()
+          if (data.profiles && Array.isArray(data.profiles)) {
+            const list = data.profiles
+              .map((p: any) => p.percentile)
+              .filter((val: any) => typeof val === "number" && !isNaN(val))
+            setPredictorProfiles(Array.from(new Set(list)))
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching predictor profiles:", err)
+      }
+    }
+
+    fetchPredictorProfiles()
+  }, [session])
+
+  // 3. Fetch Dynamic Branches & Cities for selected CAP Round
   useEffect(() => {
     async function fetchOptions() {
       setLoadingOptions(true)
@@ -110,7 +135,7 @@ export default function PreferenceListGeneratorPage() {
     fetchOptions()
   }, [capRound])
 
-  // 3. Check Purchase status whenever session or capRound changes
+  // 4. Check Purchase status whenever session or capRound changes
   useEffect(() => {
     async function checkPurchase() {
       if (!session || !session.user) {
@@ -118,6 +143,7 @@ export default function PreferenceListGeneratorPage() {
         setIsIncludedInPlan(false)
         setPlanName("")
         setSavedPercentile(null)
+        setAllPurchases([])
         return
       }
 
@@ -125,13 +151,16 @@ export default function PreferenceListGeneratorPage() {
         const res = await fetch(`/api/preference-generator/purchase?round=${encodeURIComponent(capRound)}`)
         if (res.ok) {
           const data = await res.json()
+          setAllPurchases(data.allPurchases || [])
           if (data.isPaid) {
-            setIsPaid(true)
             setIsIncludedInPlan(!!data.isIncludedInPlan)
             setPlanName(data.planName || "")
             if (data.purchase?.savedPercentile) {
               setSavedPercentile(data.purchase.savedPercentile)
-              setPercentile(data.purchase.savedPercentile.toFixed(2))
+              // Set percentile input to locked percentile if none typed yet
+              if (!percentile) {
+                setPercentile(data.purchase.savedPercentile.toFixed(2))
+              }
             } else {
               setSavedPercentile(null)
             }
@@ -150,7 +179,7 @@ export default function PreferenceListGeneratorPage() {
     checkPurchase()
   }, [session, capRound])
 
-  // 4. Handle Generate Preference List
+  // 5. Handle Generate Preference List
   const handleGenerate = async (overridePercentile?: number) => {
     setErrorMsg(null)
     const targetPercentile = overridePercentile ?? parseFloat(percentile)
@@ -209,7 +238,11 @@ export default function PreferenceListGeneratorPage() {
       setIsPaid(data.isPaid || false)
       if (data.savedPercentile) {
         setSavedPercentile(data.savedPercentile)
-        setPercentile(data.savedPercentile.toFixed(2))
+      }
+      if (data.lockedPercentileMismatch && data.savedPercentile) {
+        setErrorMsg(
+          `This purchase for ${capRound} is permanently locked to percentile ${data.savedPercentile.toFixed(2)}%. Please use ${data.savedPercentile.toFixed(2)}% or purchase another Preference List plan to unlock percentile ${targetPercentile.toFixed(2)}%.`
+        )
       }
       setHasGenerated(true)
     } catch (err: any) {
@@ -408,6 +441,47 @@ export default function PreferenceListGeneratorPage() {
               )
             )}
           </div>
+
+          {/* Predictor Saved Percentiles Selection */}
+          {predictorProfiles.length > 0 && (
+            <div className="rounded-xl bg-slate-50/80 border border-slate-200/80 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-blue-600" /> Predictor Saved Percentiles
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium">Click to select for {capRound}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {predictorProfiles.map((pVal) => {
+                  const pStr = pVal.toFixed(2)
+                  const isSelected = percentile === pStr || percentile === String(pVal)
+                  const isLockedForCurrentRound = savedPercentile !== null && Math.abs(savedPercentile - pVal) < 0.05
+
+                  return (
+                    <button
+                      key={pVal}
+                      type="button"
+                      onClick={() => setPercentile(pStr)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
+                        isSelected
+                          ? "bg-blue-600 text-white border-blue-600 shadow-xs scale-105"
+                          : isLockedForCurrentRound
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                          : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200"
+                      }`}
+                    >
+                      <span>{pStr}%</span>
+                      {isLockedForCurrentRound && (
+                        <span className="text-[10px] bg-emerald-600 text-white px-1.5 py-0.2 rounded font-semibold">
+                          🔒 {capRound} Locked
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* 1. Exam Selection */}

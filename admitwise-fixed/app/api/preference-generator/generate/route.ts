@@ -28,7 +28,9 @@ export async function POST(req: Request) {
 
     const session = (await getServerSession(authOptions)) as CustomSession | null
     let isPaid = false
+    let isIncludedInPlan = false
     let savedPercentile: number | undefined = undefined
+    let lockedPercentileMismatch = false
 
     if (session && session.user) {
       try {
@@ -39,6 +41,7 @@ export async function POST(req: Request) {
 
         if (userRecord && (userRecord.currentPlan === "premium" || userRecord.currentPlan === "elite")) {
           isPaid = true
+          isIncludedInPlan = true
         } else if (db && (db as any).preferenceGeneratorPurchase) {
           const purchase = await db.preferenceGeneratorPurchase.findUnique({
             where: {
@@ -50,10 +53,16 @@ export async function POST(req: Request) {
           })
 
           if (purchase && purchase.status === "Paid") {
-            isPaid = true
             savedPercentile = purchase.savedPercentile
-            // Override input percentile with saved locked percentile ONLY for ₹599 single-round purchases
-            percentile = purchase.savedPercentile
+            // Check if input percentile matches the locked percentile for this round
+            if (Math.abs(percentile - purchase.savedPercentile) < 0.05) {
+              isPaid = true
+              percentile = purchase.savedPercentile
+            } else {
+              // Mismatch: Purchased for a different percentile in this round
+              isPaid = false
+              lockedPercentileMismatch = true
+            }
           }
         }
       } catch (e) {
@@ -105,7 +114,9 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       isPaid,
+      isIncludedInPlan,
       savedPercentile,
+      lockedPercentileMismatch,
       totalCount,
       previewCount,
       items,

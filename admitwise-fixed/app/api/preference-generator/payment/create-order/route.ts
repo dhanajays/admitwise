@@ -58,10 +58,12 @@ export async function POST(req: Request) {
     }
 
     if (existing && existing.status === "Paid") {
-      return NextResponse.json(
-        { error: `You have already unlocked ${round} preference generator.` },
-        { status: 400 }
-      )
+      if (Math.abs(existing.savedPercentile - percentile) < 0.05) {
+        return NextResponse.json(
+          { error: `You have already unlocked ${round} for percentile ${existing.savedPercentile}%.` },
+          { status: 400 }
+        )
+      }
     }
 
     const receiptId = `pref_${userId.slice(-6)}_${Date.now().toString().slice(-6)}`

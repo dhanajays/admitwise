@@ -33,20 +33,25 @@ export async function GET(req: Request) {
       console.error("Error looking up user plan for preference access check:", userPlanErr)
     }
 
-    // 2. Check individual ₹599 PreferenceGeneratorPurchase record
+    // 2. Check individual ₹599 PreferenceGeneratorPurchase records
     let purchase = null
+    let allPurchases: any[] = []
     if (db && (db as any).preferenceGeneratorPurchase) {
       try {
-        purchase = await db.preferenceGeneratorPurchase.findUnique({
+        const records = await db.preferenceGeneratorPurchase.findMany({
           where: {
-            userId_round: {
-              userId: session.user.id,
-              round,
-            },
+            userId: session.user.id,
+            status: "Paid",
           },
         })
+        allPurchases = records.map((r: any) => ({
+          round: r.round,
+          savedPercentile: r.savedPercentile,
+          createdAt: r.createdAt.toISOString(),
+        }))
+        purchase = records.find((r: any) => r.round === round) || null
       } catch (e) {
-        console.error("Error looking up purchase record:", e)
+        console.error("Error looking up purchase records:", e)
       }
     }
 
@@ -61,10 +66,17 @@ export async function GET(req: Request) {
           savedPercentile: purchase.savedPercentile,
           createdAt: purchase.createdAt.toISOString(),
         },
+        allPurchases,
       })
     }
 
-    return NextResponse.json({ hasPurchased: false, isPaid: false, isIncludedInPlan: false, purchase: null })
+    return NextResponse.json({
+      hasPurchased: false,
+      isPaid: false,
+      isIncludedInPlan: false,
+      purchase: null,
+      allPurchases,
+    })
   } catch (error) {
     console.error("Error in /api/preference-generator/purchase GET:", error)
     return NextResponse.json({ hasPurchased: false, isPaid: false, purchase: null })
