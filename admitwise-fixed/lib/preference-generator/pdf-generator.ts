@@ -157,23 +157,31 @@ export async function generatePreferencePDF(
     margin: { top: 25, bottom: 20, left: margin, right: margin },
   })
 
-  // Footer on all pages
+  // Footer & Light Logo Watermark on all pages
   const totalPages = (doc as any).internal.getNumberOfPages()
+  const wmWidth = pageWidth * 0.40 // 40% of page width
+  const wmHeight = wmWidth * (20 / 38)
+  const wmX = (pageWidth - wmWidth) / 2
+  const wmY = (pageHeight - wmHeight) / 2
+
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i)
 
-    // Watermark
-    doc.saveGraphicsState()
-    doc.setTextColor(226, 232, 240)
-    doc.setFontSize(40)
-    doc.setFont("helvetica", "bold")
-    doc.text("AdmitWise", pageWidth / 2, pageHeight / 2, {
-      align: "center",
-      angle: 35,
-    })
-    doc.restoreGraphicsState()
+    // Professional Watermark: AdmitWise Logo only, centered, 5% opacity
+    if (logoDataUrl) {
+      try {
+        doc.saveGraphicsState()
+        if ((doc as any).GState) {
+          doc.setGState(new (doc as any).GState({ opacity: 0.05 }))
+        }
+        doc.addImage(logoDataUrl, "PNG", wmX, wmY, wmWidth, wmHeight)
+        doc.restoreGraphicsState()
+      } catch (err) {
+        console.warn("Error rendering PDF watermark logo:", err)
+      }
+    }
 
-    // Bottom Bar
+    // Bottom Footer Line & Branding
     doc.setDrawColor(226, 232, 240)
     doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12)
 
