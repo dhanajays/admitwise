@@ -16,6 +16,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Zap,
+  Plus,
 } from "lucide-react"
 import { PrioritySelector } from "@/components/preference-generator/priority-selector"
 import { SiteHeader } from "@/components/site-header"
