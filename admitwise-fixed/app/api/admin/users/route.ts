@@ -90,31 +90,42 @@ export async function GET(req: Request) {
       })
     }
 
-    const formatted = await Promise.all(
-      students.map(async (u: any) => {
-        const access = await getPreferenceListAccess(u.id)
+    const formatted = students.map((u: any) => {
+      const currentPlan = (u.currentPlan || "free").toLowerCase()
+      const isFullPlan = currentPlan === "premium" || currentPlan === "elite"
+      const includedSlots = currentPlan === "premium" ? 3 : currentPlan === "elite" ? 4 : 0
 
-        return {
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          mobile: u.mobile,
-          createdAt: u.createdAt,
-          lastLogin: u.lastLogin,
-          loginProvider: u.loginProvider,
-          currentPlan: u.currentPlan,
-          paymentStatus: u.paymentStatus,
-          profileLimit: u.profileLimit,
-          profilesUsed: u.profilesUsed,
-          isSuspended: u.isSuspended,
-          role: u.role?.name || "Student",
-          hasPreferenceAccess: access.hasAccess,
-          preferenceTotalSlots: access.totalMaxSlots,
-          preferenceUsedSlots: access.usedSlots,
-          preferencePurchases: access.purchases,
-        }
-      })
-    )
+      const purchases = Array.isArray(u.preferenceGeneratorPurchases) ? u.preferenceGeneratorPurchases : []
+      const paidPurchases = purchases.filter((p: any) => (p.status || "").toLowerCase() === "paid")
+
+      const purchasedSlots = isFullPlan
+        ? paidPurchases.filter((p: any) => p.amount === 599).length
+        : paidPurchases.length
+
+      const totalMaxSlots = isFullPlan ? includedSlots + purchasedSlots : Math.max(purchasedSlots, 0)
+      const usedSlots = Array.isArray(u.preferenceSavedPercentiles) ? u.preferenceSavedPercentiles.length : 0
+      const hasAccess = isFullPlan || paidPurchases.length > 0 || totalMaxSlots > 0
+
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        mobile: u.mobile,
+        createdAt: u.createdAt,
+        lastLogin: u.lastLogin,
+        loginProvider: u.loginProvider,
+        currentPlan: u.currentPlan,
+        paymentStatus: u.paymentStatus,
+        profileLimit: u.profileLimit,
+        profilesUsed: u.profilesUsed,
+        isSuspended: u.isSuspended,
+        role: u.role?.name || "Student",
+        hasPreferenceAccess: hasAccess,
+        preferenceTotalSlots: totalMaxSlots,
+        preferenceUsedSlots: usedSlots,
+        preferencePurchases: paidPurchases,
+      }
+    })
 
     return NextResponse.json(formatted)
   } catch (error: any) {
