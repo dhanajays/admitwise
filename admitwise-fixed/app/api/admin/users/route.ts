@@ -336,6 +336,10 @@ export async function POST(req: Request) {
             }
           }
 
+          // Model resolution with fallback to prevent undefined delegate crashes
+          const purchaseModel = (tx as any)?.preferenceGeneratorPurchase || (db as any)?.preferenceGeneratorPurchase
+          const savedPercentileModel = (tx as any)?.preferenceSavedPercentile || (db as any)?.preferenceSavedPercentile
+
           // Case A: Grant ₹5000 Premium Plan
           if (normType.includes("5000") || normType.includes("premium")) {
             console.log("Granting ₹5000 Premium Plan (3 slots, All Rounds)...")
@@ -367,17 +371,19 @@ export async function POST(req: Request) {
               })
             }
 
-            console.log("Before findFirst Case A", {
-              tx: !!tx,
-              tx_preferenceGeneratorPurchase: !!(tx as any)?.preferenceGeneratorPurchase,
-              db_preferenceGeneratorPurchase: !!(db as any)?.preferenceGeneratorPurchase,
-            })
-            const existingPurchase = await tx.preferenceGeneratorPurchase.findFirst({
-              where: { userId, round: "ALL" },
-            })
+            console.log("------------------------------------------------");
+            console.log("FILE: app/api/admin/users/route.ts");
+            console.log("LINE: 375 (Case A)");
+            console.log("OBJECT purchaseModel =", purchaseModel);
+            console.log("TYPE =", typeof purchaseModel);
+            console.log("------------------------------------------------");
 
-            if (existingPurchase) {
-              await tx.preferenceGeneratorPurchase.update({
+            const existingPurchase = purchaseModel?.findFirst
+              ? await purchaseModel.findFirst({ where: { userId, round: "ALL" } })
+              : null
+
+            if (existingPurchase && purchaseModel?.update) {
+              await purchaseModel.update({
                 where: { id: existingPurchase.id },
                 data: {
                   status: "Paid",
@@ -386,8 +392,8 @@ export async function POST(req: Request) {
                   paymentId: "admin_manual_premium",
                 },
               })
-            } else {
-              await tx.preferenceGeneratorPurchase.create({
+            } else if (purchaseModel?.create) {
+              await purchaseModel.create({
                 data: {
                   userId,
                   round: "ALL",
@@ -399,13 +405,15 @@ export async function POST(req: Request) {
               })
             }
 
-            await tx.preferenceSavedPercentile.upsert({
-              where: {
-                userId_savedPercentile: { userId, savedPercentile: percentile },
-              },
-              create: { userId, savedPercentile: percentile },
-              update: {},
-            })
+            if (savedPercentileModel?.upsert) {
+              await savedPercentileModel.upsert({
+                where: {
+                  userId_savedPercentile: { userId, savedPercentile: percentile },
+                },
+                create: { userId, savedPercentile: percentile },
+                update: {},
+              })
+            }
 
             console.log("✓ Granted ₹5000 Premium Plan successfully.")
             return {
@@ -447,17 +455,19 @@ export async function POST(req: Request) {
               })
             }
 
-            console.log("Before findFirst Case B", {
-              tx: !!tx,
-              tx_preferenceGeneratorPurchase: !!(tx as any)?.preferenceGeneratorPurchase,
-              db_preferenceGeneratorPurchase: !!(db as any)?.preferenceGeneratorPurchase,
-            })
-            const existingPurchase = await tx.preferenceGeneratorPurchase.findFirst({
-              where: { userId, round: "ALL" },
-            })
+            console.log("------------------------------------------------");
+            console.log("FILE: app/api/admin/users/route.ts");
+            console.log("LINE: 450 (Case B)");
+            console.log("OBJECT purchaseModel =", purchaseModel);
+            console.log("TYPE =", typeof purchaseModel);
+            console.log("------------------------------------------------");
 
-            if (existingPurchase) {
-              await tx.preferenceGeneratorPurchase.update({
+            const existingPurchase = purchaseModel?.findFirst
+              ? await purchaseModel.findFirst({ where: { userId, round: "ALL" } })
+              : null
+
+            if (existingPurchase && purchaseModel?.update) {
+              await purchaseModel.update({
                 where: { id: existingPurchase.id },
                 data: {
                   status: "Paid",
@@ -466,8 +476,8 @@ export async function POST(req: Request) {
                   paymentId: "admin_manual_elite",
                 },
               })
-            } else {
-              await tx.preferenceGeneratorPurchase.create({
+            } else if (purchaseModel?.create) {
+              await purchaseModel.create({
                 data: {
                   userId,
                   round: "ALL",
@@ -479,13 +489,15 @@ export async function POST(req: Request) {
               })
             }
 
-            await tx.preferenceSavedPercentile.upsert({
-              where: {
-                userId_savedPercentile: { userId, savedPercentile: percentile },
-              },
-              create: { userId, savedPercentile: percentile },
-              update: {},
-            })
+            if (savedPercentileModel?.upsert) {
+              await savedPercentileModel.upsert({
+                where: {
+                  userId_savedPercentile: { userId, savedPercentile: percentile },
+                },
+                create: { userId, savedPercentile: percentile },
+                update: {},
+              })
+            }
 
             console.log("✓ Granted ₹6000 Elite Plan successfully.")
             return {
@@ -497,18 +509,20 @@ export async function POST(req: Request) {
           }
 
           // Case C: Grant ₹599 Preference List Access for a specific round
-          console.log("Before findFirst Case C", {
-            tx: !!tx,
-            tx_preferenceGeneratorPurchase: !!(tx as any)?.preferenceGeneratorPurchase,
-            db_preferenceGeneratorPurchase: !!(db as any)?.preferenceGeneratorPurchase,
-          })
-          const existingPurchase = await tx.preferenceGeneratorPurchase.findFirst({
-            where: { userId, round },
-          })
+          console.log("------------------------------------------------");
+          console.log("FILE: app/api/admin/users/route.ts");
+          console.log("LINE: 500 (Case C)");
+          console.log("OBJECT purchaseModel =", purchaseModel);
+          console.log("TYPE =", typeof purchaseModel);
+          console.log("------------------------------------------------");
 
-          if (existingPurchase) {
+          const existingPurchase = purchaseModel?.findFirst
+            ? await purchaseModel.findFirst({ where: { userId, round } })
+            : null
+
+          if (existingPurchase && purchaseModel?.update) {
             console.log("Updating existing purchase record ID:", existingPurchase.id)
-            await tx.preferenceGeneratorPurchase.update({
+            await purchaseModel.update({
               where: { id: existingPurchase.id },
               data: {
                 status: "Paid",
@@ -517,9 +531,9 @@ export async function POST(req: Request) {
                 paymentId: "admin_manual",
               },
             })
-          } else {
+          } else if (purchaseModel?.create) {
             console.log("Creating new purchase record...")
-            await tx.preferenceGeneratorPurchase.create({
+            await purchaseModel.create({
               data: {
                 userId,
                 round,
@@ -531,14 +545,16 @@ export async function POST(req: Request) {
             })
           }
 
-          console.log("Updating saved percentile profile...")
-          await tx.preferenceSavedPercentile.upsert({
-            where: {
-              userId_savedPercentile: { userId, savedPercentile: percentile },
-            },
-            create: { userId, savedPercentile: percentile },
-            update: {},
-          })
+          if (savedPercentileModel?.upsert) {
+            console.log("Updating saved percentile profile...")
+            await savedPercentileModel.upsert({
+              where: {
+                userId_savedPercentile: { userId, savedPercentile: percentile },
+              },
+              create: { userId, savedPercentile: percentile },
+              update: {},
+            })
+          }
 
           console.log("✓ Granted Preference List access for", round)
           return {
