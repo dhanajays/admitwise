@@ -10,36 +10,42 @@ export function getRazorpayCredentialsForProduct(productType?: string | null) {
     pType === "addon_pref"
 
   if (isPreferenceList) {
-    // ENFORCE TEST MODE ONLY FOR ₹599 PREFERENCE LIST
-    const testKeyId =
+    const keyId =
       process.env.RAZORPAY_TEST_KEY_ID ||
-      process.env.NEXT_PUBLIC_RAZORPAY_TEST_KEY_ID ||
-      "rzp_test_TH3gw79Ps4yl9K"
-    const testKeySecret =
-      process.env.RAZORPAY_TEST_KEY_SECRET ||
-      "bwye64I1huGjsIRgoH7zfJ6j"
+      process.env.NEXT_PUBLIC_RAZORPAY_TEST_KEY_ID
+
+    const keySecret = process.env.RAZORPAY_TEST_KEY_SECRET
+
+    if (!keyId || !keySecret) {
+      console.error("❌ Missing RAZORPAY_TEST_KEY_ID or RAZORPAY_TEST_KEY_SECRET in server environment variables!")
+      throw new Error("Missing RAZORPAY_TEST_KEY_ID or RAZORPAY_TEST_KEY_SECRET in server environment variables")
+    }
 
     return {
-      keyId: testKeyId,
-      keySecret: testKeySecret,
+      keyId,
+      keySecret,
       isTest: true,
     }
   }
 
-  // ENFORCE LIVE MODE ONLY FOR ₹5000 PREMIUM & ₹6000 ELITE PLANS
-  const liveKeyId =
+  // Live credentials for Premium (₹5000) & Elite (₹6000)
+  const keyId =
     process.env.RAZORPAY_LIVE_KEY_ID ||
     process.env.RAZORPAY_KEY_ID ||
-    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
-    "rzp_live_T8xY9cnpDvuIet"
-  const liveKeySecret =
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+
+  const keySecret =
     process.env.RAZORPAY_LIVE_KEY_SECRET ||
-    process.env.RAZORPAY_KEY_SECRET ||
-    "w9KHRXh5I7v0pozqBZwBCRIi"
+    process.env.RAZORPAY_KEY_SECRET
+
+  if (!keyId || !keySecret) {
+    console.error("❌ Missing RAZORPAY_LIVE_KEY_ID or RAZORPAY_LIVE_KEY_SECRET in server environment variables!")
+    throw new Error("Missing RAZORPAY_LIVE_KEY_ID or RAZORPAY_LIVE_KEY_SECRET in server environment variables")
+  }
 
   return {
-    keyId: liveKeyId,
-    keySecret: liveKeySecret,
+    keyId,
+    keySecret,
     isTest: false,
   }
 }
@@ -50,12 +56,7 @@ export function getRazorpayKeyId(productType?: string | null): string {
 }
 
 export function getRazorpay(productType?: string | null) {
-  const { keyId, keySecret, isTest } = getRazorpayCredentialsForProduct(productType)
-
-  if (!keyId || !keySecret) {
-    console.error("❌ Missing Razorpay environment variables!", { productType, isTest })
-    throw new Error("Missing Razorpay environment variables")
-  }
+  const { keyId, keySecret } = getRazorpayCredentialsForProduct(productType)
 
   return new Razorpay({
     key_id: keyId,
@@ -74,7 +75,7 @@ export async function createRazorpayOrder(
   console.log(`ℹ️ [RAZORPAY ORDER CREATION]`)
   console.log(`Selected Plan: ${productType || "general"}`)
   console.log(`Using TEST Razorpay: ${isTest}`)
-  console.log(`Selected Key ID: ${keyId}`)
+  console.log(`Using LIVE Razorpay: ${!isTest}`)
   console.log(`Order Account: ${isTest ? "TEST" : "LIVE"}`)
 
   // Check for mock mode in dev if keys missing
@@ -144,13 +145,21 @@ export function verifyRazorpaySignature(
       return true
     }
 
-    // Defensive fallback: check alternate keySecret if productType wasn't passed explicitly
+    // Defensive fallback: check alternate keySecret from environment variables if productType was omitted
     const alternateSecret =
-      process.env.RAZORPAY_TEST_KEY_SECRET || "bwye64I1huGjsIRgoH7zfJ6j"
+      process.env.RAZORPAY_TEST_KEY_SECRET === keySecret
+        ? process.env.RAZORPAY_LIVE_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET
+        : process.env.RAZORPAY_TEST_KEY_SECRET
 
-    const altHmac = crypto.createHmac("sha256", alternateSecret)
-    altHmac.update(`${orderId}|${paymentId}`)
-    return altHmac.digest("hex") === signature
+    if (alternateSecret) {
+      const altHmac = crypto.createHmac("sha256", alternateSecret)
+      altHmac.update(`${orderId}|${paymentId}`)
+      if (altHmac.digest("hex") === signature) {
+        return true
+      }
+    }
+
+    return false
   } catch (error) {
     console.error("❌ Razorpay Signature Verification failed:", error)
     return false
