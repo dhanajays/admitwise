@@ -289,6 +289,13 @@ export async function POST(req: Request) {
 
       try {
         const result = await db.$transaction(async (tx) => {
+          console.log("Model Exists:", {
+            user: !!tx.user,
+            subscription: !!tx.subscription,
+            preferenceGeneratorPurchase: !!tx.preferenceGeneratorPurchase,
+            preferenceSavedPercentile: !!tx.preferenceSavedPercentile,
+          })
+
           console.log("Loading student...")
           const student = await tx.user.findUnique({
             where: { id: userId },
