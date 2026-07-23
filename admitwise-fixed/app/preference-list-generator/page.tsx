@@ -17,9 +17,6 @@ import {
   ShieldCheck,
   Zap,
   Plus,
-  X,
-  LogIn,
-  UserPlus,
 } from "lucide-react"
 import { PrioritySelector } from "@/components/preference-generator/priority-selector"
 import { SiteHeader } from "@/components/site-header"
@@ -86,7 +83,6 @@ export default function PreferenceListGeneratorPage() {
   const [purchasing, setPurchasing] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [loginModalOpen, setLoginModalOpen] = useState(false)
   const autoGenerateRef = useRef(false)
 
   // 1. Restore Form Draft after Login / Sign Up
@@ -94,13 +90,18 @@ export default function PreferenceListGeneratorPage() {
     try {
       const savedDraftStr =
         sessionStorage.getItem("preferenceGeneratorDraft") ||
-        localStorage.getItem("preferenceGeneratorDraft")
+        localStorage.getItem("preferenceGeneratorDraft") ||
+        sessionStorage.getItem("preference-generator-draft") ||
+        localStorage.getItem("preference-generator-draft")
 
       if (savedDraftStr) {
         const draft = JSON.parse(savedDraftStr)
         sessionStorage.removeItem("preferenceGeneratorDraft")
         localStorage.removeItem("preferenceGeneratorDraft")
+        sessionStorage.removeItem("preference-generator-draft")
+        localStorage.removeItem("preference-generator-draft")
 
+        if (draft.exam) setExam(draft.exam)
         if (draft.percentile) setPercentile(String(draft.percentile))
         if (draft.round) setCapRound(draft.round)
         if (draft.category) setCategory(draft.category)
@@ -259,10 +260,11 @@ export default function PreferenceListGeneratorPage() {
       return
     }
 
-    // STEP 1 — Authentication check (always runs before any generation or payment)
+    // STEP 1 — Authentication check: Immediately redirect unauthenticated users to login
     if (!session || !session.user) {
-      // Save complete form draft so it is fully restored after login
+      // Save complete form draft to sessionStorage & localStorage
       const draft = {
+        exam,
         percentile: String(targetPercentile),
         round: capRound,
         category,
@@ -275,10 +277,14 @@ export default function PreferenceListGeneratorPage() {
       try {
         sessionStorage.setItem("preferenceGeneratorDraft", JSON.stringify(draft))
         localStorage.setItem("preferenceGeneratorDraft", JSON.stringify(draft))
+        sessionStorage.setItem("preference-generator-draft", JSON.stringify(draft))
+        localStorage.setItem("preference-generator-draft", JSON.stringify(draft))
       } catch (e) {
         console.error("Error saving preference generator draft:", e)
       }
-      setLoginModalOpen(true)
+
+      // Immediately redirect to login page with callbackUrl
+      window.location.href = `/login?callbackUrl=${encodeURIComponent("/preference-list-generator")}`
       return
     }
 
@@ -906,108 +912,6 @@ export default function PreferenceListGeneratorPage() {
       </div>
     </main>
     <SiteFooter />
-
-      {/* ── Login Required Modal ── */}
-      <AnimatePresence>
-        {loginModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          >
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"
-              onClick={() => setLoginModalOpen(false)}
-            />
-
-            {/* Modal Card */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: 20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 28 }}
-              className="relative z-10 w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
-            >
-              {/* Top accent bar */}
-              <div className="h-1.5 w-full bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600" />
-
-              {/* Close button */}
-              <button
-                type="button"
-                onClick={() => setLoginModalOpen(false)}
-                className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-
-              <div className="p-7 pt-6 space-y-6">
-                {/* Icon + Title */}
-                <div className="flex flex-col items-center text-center space-y-3">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/30">
-                    <Lock className="h-7 w-7 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-extrabold text-slate-900">🔒 Login Required</h2>
-                    <p className="text-sm text-slate-500 mt-1.5 leading-relaxed max-w-sm">
-                      Please sign in or create an account to generate your AI Preference List.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Trust line */}
-                <div className="rounded-xl bg-blue-50 border border-blue-100 p-3.5 text-xs text-blue-700 leading-relaxed">
-                  <span className="font-bold">Your data is secure.</span> Your preference list, purchased plans, saved percentiles, and PDF downloads are securely linked to your account.
-                </div>
-
-                {/* Form values will be restored note */}
-                <div className="flex items-start gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl p-3">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-500" />
-                  <span>Your form values (percentile, branches, cities, category, etc.) will be <strong>automatically restored</strong> after you sign in — no need to fill them again.</span>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginModalOpen(false)
-                      window.location.href = `/login?callbackUrl=${encodeURIComponent("/preference-list-generator")}`
-                    }}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-blue-500/25 transition-all hover:scale-[1.02] hover:shadow-blue-500/35 active:scale-[0.98] cursor-pointer"
-                  >
-                    <LogIn className="h-4 w-4" /> Sign In to Continue
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginModalOpen(false)
-                      window.location.href = `/register?callbackUrl=${encodeURIComponent("/preference-list-generator")}`
-                    }}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white py-3.5 text-sm font-bold text-slate-800 transition-all hover:border-blue-300 hover:bg-blue-50 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                  >
-                    <UserPlus className="h-4 w-4" /> Create Account — It’s Free
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setLoginModalOpen(false)}
-                    className="w-full text-sm font-medium text-slate-400 hover:text-slate-600 py-1.5 transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
   </div>
   )
 }
