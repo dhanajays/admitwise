@@ -647,16 +647,13 @@ export async function getPreferenceListAccess(userId: string): Promise<Preferenc
   }
 }
 
+export type PreferenceListMode = "preview" | "full" | "blocked"
+
 export interface PreferenceEntitlement {
+  mode: PreferenceListMode
   hasRoundAccess: boolean
-  hasSavedPercentile: boolean
-  isPreview: boolean
-  showPaymentCTA: boolean
+  isPercentileSaved: boolean
   enablePdf: boolean
-  showFullList: boolean
-  allowedPercentile: boolean
-  savePercentileAfterPurchase: boolean
-  statusState: "UNPAID_ROUND" | "PAID_ROUND_SAVED_PERCENTILE" | "PAID_ROUND_UNSAVED_PERCENTILE"
   message: string
   isFullPlan: boolean
   planName: string
@@ -668,33 +665,43 @@ export interface PreferenceEntitlement {
 }
 
 export async function getPreferenceListEntitlement(
-  userId: string,
+  userId: string | null | undefined,
   selectedRound: string,
   enteredPercentile: number
 ): Promise<PreferenceEntitlement> {
+  if (!userId) {
+    return {
+      mode: "preview",
+      hasRoundAccess: false,
+      isPercentileSaved: false,
+      enablePdf: false,
+      message: `Purchase ${selectedRound} (₹599) to unlock full preference list.`,
+      isFullPlan: false,
+      planName: "Free Plan",
+      allowedRounds: [],
+      savedPercentiles: [],
+      purchasedSlots: 0,
+      totalMaxSlots: 0,
+      usedSlots: 0,
+    }
+  }
+
   const access = await getPreferenceListAccess(userId)
   const isFullPlan = access.isFullPlan
 
-  const hasRoundAccess = isFullPlan || access.allowedRounds.includes(selectedRound) || access.allowedRounds.includes("ALL")
+  const hasRoundAccess = isFullPlan || access.allowedRounds.includes(selectedRound)
 
-  const hasSavedPercentile = access.savedPercentiles.some(
+  const isPercentileSaved = access.savedPercentiles.some(
     (sp) => Math.abs(sp - enteredPercentile) < 0.01
   )
 
-  // RULE 9 Decision Flow:
   // Step 1: Has the student purchased this CAP Round?
   if (!hasRoundAccess) {
-    // Round is NOT purchased -> Always Preview Mode (Top 5 colleges, blur remaining, PDF disabled, ₹599 Purchase button)
     return {
+      mode: "preview",
       hasRoundAccess: false,
-      hasSavedPercentile,
-      isPreview: true,
-      showPaymentCTA: true,
+      isPercentileSaved,
       enablePdf: false,
-      showFullList: false,
-      allowedPercentile: false,
-      savePercentileAfterPurchase: !hasSavedPercentile,
-      statusState: "UNPAID_ROUND",
       message: `Purchase ${selectedRound} (₹599) to unlock full preference list.`,
       isFullPlan: false,
       planName: access.planName,
@@ -706,19 +713,13 @@ export async function getPreferenceListEntitlement(
     }
   }
 
-  // Step 2: CAP Round IS purchased -> Check: Is the entered percentile already saved? (or Full Plan)
-  if (hasSavedPercentile || isFullPlan) {
-    // Unlock everything: Full list, PDF enabled, No payment
+  // Step 2: CAP Round IS purchased -> Check if entered percentile is saved (or Full Plan)
+  if (isPercentileSaved || isFullPlan) {
     return {
+      mode: "full",
       hasRoundAccess: true,
-      hasSavedPercentile: true,
-      isPreview: false,
-      showPaymentCTA: false,
+      isPercentileSaved: true,
       enablePdf: true,
-      showFullList: true,
-      allowedPercentile: true,
-      savePercentileAfterPurchase: false,
-      statusState: "PAID_ROUND_SAVED_PERCENTILE",
       message: "Full Preference List unlocked.",
       isFullPlan,
       planName: access.planName,
@@ -730,18 +731,12 @@ export async function getPreferenceListEntitlement(
     }
   }
 
-  // Rule 6: CAP Round is purchased, but entered percentile is NOT saved.
-  // Do NOT generate list. Prompt to purchase +1 Saved Percentile (₹599).
+  // Step 3: CAP Round IS purchased BUT entered percentile is NOT saved
   return {
+    mode: "blocked",
     hasRoundAccess: true,
-    hasSavedPercentile: false,
-    isPreview: false,
-    showPaymentCTA: true,
+    isPercentileSaved: false,
     enablePdf: false,
-    showFullList: false,
-    allowedPercentile: false,
-    savePercentileAfterPurchase: true,
-    statusState: "PAID_ROUND_UNSAVED_PERCENTILE",
     message: "You don't have this percentile saved. Purchase +1 Saved Percentile (₹599) to use this percentile.",
     isFullPlan: false,
     planName: access.planName,
@@ -750,38 +745,5 @@ export async function getPreferenceListEntitlement(
     purchasedSlots: access.purchasedSlots,
     totalMaxSlots: access.totalMaxSlots,
     usedSlots: access.usedSlots,
-  }
-}
-
-export interface EntitlementResult {
-  hasAccess: boolean
-  previewOnly: boolean
-  pdfEnabled: boolean
-  isFullPlan: boolean
-  planName: string
-  allowedRounds: string[]
-  savedPercentiles: number[]
-  statusState: "UNPAID_ROUND" | "PAID_ROUND_SAVED_PERCENTILE" | "PAID_ROUND_UNSAVED_PERCENTILE"
-  message: string
-  reason?: string
-}
-
-export async function evaluatePreferenceListAccess(
-  userId: string,
-  selectedRound: string,
-  enteredPercentile: number
-): Promise<EntitlementResult> {
-  const entitlement = await getPreferenceListEntitlement(userId, selectedRound, enteredPercentile)
-  return {
-    hasAccess: entitlement.showFullList,
-    previewOnly: entitlement.isPreview,
-    pdfEnabled: entitlement.enablePdf,
-    isFullPlan: entitlement.isFullPlan,
-    planName: entitlement.planName,
-    allowedRounds: entitlement.allowedRounds,
-    savedPercentiles: entitlement.savedPercentiles,
-    statusState: entitlement.statusState,
-    message: entitlement.message,
-    reason: entitlement.message,
   }
 }

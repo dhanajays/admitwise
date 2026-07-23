@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions, CustomSession } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { evaluatePreferenceListAccess, EntitlementResult } from "@/lib/payments"
+import { getPreferenceListEntitlement } from "@/lib/payments"
 import { PreferenceGeneratorService } from "@/lib/preference-generator/service"
 import { z } from "zod"
 
@@ -31,37 +31,28 @@ export async function POST(req: Request) {
     let { percentile, round, preferredBranches, preferredCities, category, gender, pwd } = parsed.data
 
     const session = (await getServerSession(authOptions)) as CustomSession | null
+    const userId = session?.user?.id
 
-    // STEP 1: Entitlement decision BEFORE generating preference list
-    let entitlement: EntitlementResult | null = null
-    let statusState: "UNPAID_ROUND" | "PAID_ROUND_SAVED_PERCENTILE" | "PAID_ROUND_UNSAVED_PERCENTILE" = "UNPAID_ROUND"
+    // 1. Calculate entitlement ONCE into a single object
+    const entitlement = await getPreferenceListEntitlement(userId, round, percentile)
 
-    if (session && session.user) {
-      try {
-        entitlement = await evaluatePreferenceListAccess(session.user.id, round, percentile)
-        statusState = entitlement.statusState
-      } catch (e) {
-        console.error("Error evaluating central preference entitlement in generate API:", e)
-        statusState = "UNPAID_ROUND"
-      }
-    }
-
-    // DECISION 1: CAP Round IS purchased BUT percentile is NOT saved (Rule 6)
-    if (statusState === "PAID_ROUND_UNSAVED_PERCENTILE") {
+    // 2. mode === "blocked": CAP Round is purchased BUT percentile is not saved
+    if (entitlement.mode === "blocked") {
       return NextResponse.json(
         {
           success: false,
-          error: entitlement?.message || "You don't have this percentile saved. Purchase +1 Saved Percentile (₹599) to use this percentile.",
-          isBlockedPercentile: true,
+          mode: "blocked",
+          error: entitlement.message,
+          items: [],
+          totalCount: 0,
           entitlement,
         },
         { status: 400 }
       )
     }
 
-    // DECISION 2: CAP Round is NOT purchased (Rule 2, 7 & 9) -> UNPAID_ROUND
-    if (statusState === "UNPAID_ROUND") {
-      // Backend returns ONLY preview data (first 5 colleges)
+    // 3. mode === "preview": CAP Round is NOT purchased
+    if (entitlement.mode === "preview") {
       const previewResult = await PreferenceGeneratorService.generatePreferenceList(
         {
           percentile,
@@ -72,16 +63,14 @@ export async function POST(req: Request) {
           gender,
           pwd,
         },
-        5 // Pass limit = 5 to ensure backend ONLY processes and returns top 5 preview items
+        5
       )
 
       const items = (previewResult.items || []).slice(0, 5)
 
       return NextResponse.json({
         success: true,
-        isPaid: false,
-        isPreview: true,
-        isIncludedInPlan: false,
+        mode: "preview",
         totalCount: previewResult.items?.length || items.length,
         previewCount: items.length,
         items,
@@ -89,7 +78,7 @@ export async function POST(req: Request) {
       })
     }
 
-    // DECISION 3: CAP Round IS purchased AND percentile IS saved (Rule 3, 4, 5) -> PAID_ROUND_SAVED_PERCENTILE
+    // 4. mode === "full": CAP Round IS purchased AND percentile IS saved
     const fullResult = await PreferenceGeneratorService.generatePreferenceList({
       percentile,
       round,
@@ -132,9 +121,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      isPaid: true,
-      isPreview: false,
-      isIncludedInPlan: entitlement?.isFullPlan || false,
+      mode: "full",
       totalCount: allItems.length,
       previewCount: allItems.length,
       items: allItems,

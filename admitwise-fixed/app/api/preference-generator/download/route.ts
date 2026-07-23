@@ -34,9 +34,9 @@ export async function POST(req: Request) {
 
     // Check Preference List access via centralized single source of truth
     const entitlement = await getPreferenceListEntitlement(session.user.id, round, percentile)
-    if (!entitlement.enablePdf || !entitlement.showFullList) {
+    if (entitlement.mode !== "full") {
       return NextResponse.json(
-        { error: entitlement.message || `You must unlock ${round} for percentile ${percentile}% before downloading the PDF preference list.` },
+        { error: entitlement.message },
         { status: 403 }
       )
     }

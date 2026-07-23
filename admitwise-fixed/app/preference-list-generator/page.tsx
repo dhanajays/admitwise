@@ -47,7 +47,7 @@ export default function PreferenceListGeneratorPage() {
   const [loadingOptions, setLoadingOptions] = useState(true)
 
   // Purchase & Result states
-  const [isPaid, setIsPaid] = useState(false)
+  const [mode, setMode] = useState<"preview" | "full" | "blocked">("preview")
   const [isIncludedInPlan, setIsIncludedInPlan] = useState(false)
   const [planName, setPlanName] = useState<string>("")
   const [savedPercentile, setSavedPercentile] = useState<number | null>(null)
@@ -64,6 +64,7 @@ export default function PreferenceListGeneratorPage() {
     usedSlots: number
     remainingSlots: number
     savedPercentiles: number[]
+    allowedRounds: string[]
   }>({
     hasAccess: false,
     isIncludedInPlan: false,
@@ -74,6 +75,7 @@ export default function PreferenceListGeneratorPage() {
     usedSlots: 0,
     remainingSlots: 0,
     savedPercentiles: [],
+    allowedRounds: [],
   })
 
   const [results, setResults] = useState<PreferenceResultItem[]>([])
@@ -168,8 +170,6 @@ export default function PreferenceListGeneratorPage() {
             setAvailableCities(data.cities || [])
             setAvailableCategories(data.categories || [])
             setDatasetInfo(data.datasetInfo || null)
-            console.log("[Frontend fetchOptions] Received Branches:", (data.branches || []).length)
-            console.log("[Frontend fetchOptions] Received Cities:", (data.cities || []).length)
           }
         } else {
           setErrorMsg(`Failed to load dataset (HTTP ${res.status})`)
@@ -188,7 +188,7 @@ export default function PreferenceListGeneratorPage() {
   // 4. Check Purchase & Slot status whenever session changes
   const checkPurchase = useCallback(async () => {
     if (!session || !session.user) {
-      setIsPaid(false)
+      setMode("preview")
       setIsIncludedInPlan(false)
       setPlanName("")
       setSavedPercentile(null)
@@ -202,6 +202,7 @@ export default function PreferenceListGeneratorPage() {
         usedSlots: 0,
         remainingSlots: 0,
         savedPercentiles: [],
+        allowedRounds: [],
       })
       return
     }
@@ -213,9 +214,6 @@ export default function PreferenceListGeneratorPage() {
         const savedList = data.savedPercentiles || []
         const roundList = data.allowedRounds || []
         const isFullPlan = !!data.isIncludedInPlan
-        const pVal = parseFloat(percentile)
-        const isRoundPurchased = isFullPlan || roundList.includes(capRound)
-        const isSavedPerc = !isNaN(pVal) && savedList.some((sp: number) => Math.abs(sp - pVal) < 0.01)
 
         setSlotStats({
           hasAccess: !!data.hasAccess,
@@ -231,14 +229,13 @@ export default function PreferenceListGeneratorPage() {
           purchases: data.purchases || [],
         })
 
-        setIsPaid(isFullPlan || (isRoundPurchased && isSavedPerc))
         setIsIncludedInPlan(isFullPlan)
         setPlanName(data.planName || "")
       }
     } catch (err) {
       console.error("Error checking slot purchase status:", err)
     }
-  }, [session, capRound, percentile])
+  }, [session])
 
   useEffect(() => {
     checkPurchase()
@@ -314,23 +311,23 @@ export default function PreferenceListGeneratorPage() {
         }),
       })
 
+      const data = await res.json()
+
       if (!res.ok) {
-        const err = await res.json()
-        if (err.slotStats) {
-          setSlotStats(err.slotStats)
-        }
-        if (err.isBlockedPercentile) {
+        if (data.mode === "blocked" || data.isBlockedPercentile) {
+          setMode("blocked")
           setResults([])
           setHasGenerated(false)
-          setIsPaid(false)
+          setErrorMsg(data.error || "You don't have this percentile saved. Purchase +1 Saved Percentile (₹599) to use this percentile.")
+          return
         }
-        throw new Error(err.error || "Failed to generate preference list.")
+        throw new Error(data.error || "Failed to generate preference list.")
       }
 
-      const data = await res.json()
+      const returnedMode = data.mode || "preview"
+      setMode(returnedMode)
       setResults(data.items || [])
       setTotalCount(data.totalCount || 0)
-      setIsPaid(data.isPaid || false)
       setHasGenerated(true)
 
       // Refresh slot stats to update used/remaining counters & saved percentiles list
@@ -762,7 +759,7 @@ export default function PreferenceListGeneratorPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-card rounded-2xl p-5 bg-white border border-slate-200 shadow-md">
               <div>
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  {isPaid ? (
+                  {mode === "full" ? (
                     <>Generated Preference List ({totalCount} Colleges)</>
                   ) : (
                     <>Preview — First {Math.min(5, totalCount)} of {totalCount} Colleges</>
@@ -773,7 +770,7 @@ export default function PreferenceListGeneratorPage() {
                 </p>
               </div>
 
-              {isPaid ? (
+              {mode === "full" ? (
                 <button
                   type="button"
                   onClick={handleDownloadPDF}
@@ -878,8 +875,8 @@ export default function PreferenceListGeneratorPage() {
                 </motion.div>
               ))}
 
-              {/* Unlock Card — shown after 5th college when user hasn't paid for current round */}
-              {!isPaid && totalCount > 5 && (
+              {/* Unlock Card — shown after 5th college when mode is preview */}
+              {mode === "preview" && totalCount > 5 && (
                 <div className="mt-6 rounded-2xl border border-blue-200 bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 shadow-2xl overflow-hidden">
                   {/* Blurred ghost rows representing locked colleges */}
                   <div className="space-y-2.5 p-4 blur-md opacity-25 pointer-events-none select-none">
