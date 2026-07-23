@@ -106,12 +106,11 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       isPaid,
-      isIncludedInPlan,
-      savedPercentile,
-      lockedPercentileMismatch,
+      isIncludedInPlan: entitlement?.isFullPlan || false,
       totalCount,
       previewCount,
       items,
+      entitlement,
     })
   } catch (error: any) {
     console.error("Error in /api/preference-generator/generate POST:", error)
