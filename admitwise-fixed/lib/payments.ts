@@ -436,10 +436,10 @@ export async function fulfillAdminGrant(params: AdminGrantParams) {
       }
     }
 
-    // Case C: ₹599 Preference List Access for all rounds
+    // Case C: ₹599 Preference List Access for a specific round
     const amount = 599
-    const targetRound = "ALL"
-    const planName = `Preference List Generator (₹599)`
+    const targetRound = round || "Round 1"
+    const planName = `Preference List Generator (₹599) - ${targetRound}`
 
     // 1. Create Payment record in Payment table (mirroring Razorpay)
     if (db.payment) {
@@ -501,10 +501,10 @@ export async function fulfillAdminGrant(params: AdminGrantParams) {
 
     return {
       success: true,
-      message: `Granted Preference List access successfully`,
+      message: `Granted Preference List access for ${targetRound}`,
       plan: user.currentPlan || "free",
       allowedSavedPercentiles: 1,
-      allowedRounds: ["Round 1", "Round 2", "Round 3", "Round 4"],
+      allowedRounds: [targetRound],
     }
   })
 }
@@ -560,7 +560,7 @@ export async function getPreferenceListAccess(userId: string): Promise<Preferenc
       })
       purchasesList = records.map((p: any) => ({
         id: p.id,
-        round: p.round || "ALL",
+        round: p.round || "Round 1",
         savedPercentile: p.savedPercentile ?? null,
         amount: p.amount ?? 599,
         status: p.status || "Paid",
@@ -605,10 +605,21 @@ export async function getPreferenceListAccess(userId: string): Promise<Preferenc
   const usedSlots = savedPercentiles.length
   const remainingSlots = Math.max(0, totalMaxSlots - usedSlots)
   const hasAccess = isFullPlan || paidPurchases.length > 0 || totalMaxSlots > 0
-  const allowedRounds = hasAccess ? ["Round 1", "Round 2", "Round 3", "Round 4"] : []
+
+  let allowedRounds: string[] = []
+  if (isFullPlan) {
+    allowedRounds = ["Round 1", "Round 2", "Round 3", "Round 4"]
+  } else {
+    const hasAll = paidPurchases.some((p) => p.round === "ALL")
+    if (hasAll) {
+      allowedRounds = ["Round 1", "Round 2", "Round 3", "Round 4"]
+    } else {
+      allowedRounds = Array.from(new Set(paidPurchases.map((p) => p.round).filter(Boolean)))
+    }
+  }
 
   if (!isFullPlan && paidPurchases.length > 0 && planName === "Free Plan") {
-    planName = "Preference List Generator (₹599)"
+    planName = `Preference List (${paidPurchases[0]?.round || "Round 1"})`
   }
 
   return {
