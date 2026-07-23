@@ -294,7 +294,15 @@ export default function StudentManagerPage() {
                         {student.currentPlan}
                       </td>
                       <td className="px-6 py-3.5 text-xs font-semibold">
-                        {student.hasPreferenceAccess ? (
+                        {student.currentPlan === "elite" ? (
+                          <span className="rounded-full bg-purple-50 border border-purple-200 px-2 py-0.5 text-xxs font-bold text-purple-700">
+                            Included in ₹6000 Plan
+                          </span>
+                        ) : student.currentPlan === "premium" ? (
+                          <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-xxs font-bold text-blue-700">
+                            Included in ₹5000 Plan
+                          </span>
+                        ) : student.hasPreferenceAccess ? (
                           <span className="rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xxs font-bold text-indigo-700">
                             ₹599 Active
                           </span>
@@ -484,11 +492,19 @@ export default function StudentManagerPage() {
             <div className="space-y-3 pt-2 border-t border-border">
               <div className="flex items-center justify-between pb-1">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <CreditCard className="h-3.5 w-3.5 text-blue-600" /> Preference Generator (₹599)
+                  <CreditCard className="h-3.5 w-3.5 text-blue-600" /> Preference Generator Access
                 </h3>
               </div>
+              {studentDetails?.currentPlan === "premium" || studentDetails?.currentPlan === "elite" ? (
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-2.5 text-xs text-blue-800 font-semibold flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-blue-600 shrink-0" />
+                  <span>Full Access Included with {studentDetails.currentPlan === "premium" ? "₹5000 Premium Plan" : "₹6000 Elite Plan"}</span>
+                </div>
+              ) : null}
               {!studentDetails?.preferenceGeneratorPurchases || studentDetails.preferenceGeneratorPurchases.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-2">No preference generator purchases.</p>
+                studentDetails?.currentPlan !== "premium" && studentDetails?.currentPlan !== "elite" && (
+                  <p className="text-xs text-muted-foreground text-center py-2">No separate ₹599 preference generator purchases.</p>
+                )
               ) : (
                 <div className="space-y-2">
                   {studentDetails.preferenceGeneratorPurchases.map((p: any) => (

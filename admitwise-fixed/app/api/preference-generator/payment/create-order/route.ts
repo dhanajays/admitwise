@@ -27,6 +27,19 @@ export async function POST(req: Request) {
     const userId = session.user.id
     const amount = 599 // ₹599
 
+    // Check if user owns Premium (₹5000) or Elite (₹6000) plan which includes full Preference List Generator access
+    const userRecord = await db.user.findUnique({
+      where: { id: userId },
+      select: { currentPlan: true },
+    })
+
+    if (userRecord && (userRecord.currentPlan === "premium" || userRecord.currentPlan === "elite")) {
+      return NextResponse.json(
+        { error: `Preference List Generator is already included in your ${userRecord.currentPlan === "premium" ? "₹5000 Premium" : "₹6000 Elite"} plan!` },
+        { status: 400 }
+      )
+    }
+
     // Safely check if already purchased (missing purchase is NOT an error)
     let existing = null
     if (db && (db as any).preferenceGeneratorPurchase) {

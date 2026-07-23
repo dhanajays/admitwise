@@ -43,6 +43,8 @@ export default function PreferenceListGeneratorPage() {
 
   // Purchase & Result states
   const [isPaid, setIsPaid] = useState(false)
+  const [isIncludedInPlan, setIsIncludedInPlan] = useState(false)
+  const [planName, setPlanName] = useState<string>("")
   const [savedPercentile, setSavedPercentile] = useState<number | null>(null)
   const [results, setResults] = useState<PreferenceResultItem[]>([])
   const [totalCount, setTotalCount] = useState<number>(0)
@@ -111,16 +113,32 @@ export default function PreferenceListGeneratorPage() {
   // 3. Check Purchase status whenever session or capRound changes
   useEffect(() => {
     async function checkPurchase() {
+      if (!session || !session.user) {
+        setIsPaid(false)
+        setIsIncludedInPlan(false)
+        setPlanName("")
+        setSavedPercentile(null)
+        return
+      }
+
       try {
         const res = await fetch(`/api/preference-generator/purchase?round=${encodeURIComponent(capRound)}`)
         if (res.ok) {
           const data = await res.json()
-          if (data.isPaid && data.purchase) {
+          if (data.isPaid) {
             setIsPaid(true)
-            setSavedPercentile(data.purchase.savedPercentile)
-            setPercentile(data.purchase.savedPercentile.toFixed(2))
+            setIsIncludedInPlan(!!data.isIncludedInPlan)
+            setPlanName(data.planName || "")
+            if (data.purchase?.savedPercentile) {
+              setSavedPercentile(data.purchase.savedPercentile)
+              setPercentile(data.purchase.savedPercentile.toFixed(2))
+            } else {
+              setSavedPercentile(null)
+            }
           } else {
             setIsPaid(false)
+            setIsIncludedInPlan(false)
+            setPlanName("")
             setSavedPercentile(null)
           }
         }
@@ -373,11 +391,21 @@ export default function PreferenceListGeneratorPage() {
               Configure Student Preferences
             </h2>
 
-            {/* Saved Percentile Badge if Purchased */}
-            {isPaid && savedPercentile !== null && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-2xs">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" /> Saved Percentile: {savedPercentile.toFixed(2)}
-              </span>
+            {/* Access / Plan Badge */}
+            {isPaid && (
+              isIncludedInPlan ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold shadow-2xs">
+                  <Sparkles className="h-4 w-4 text-blue-600" /> {planName || "Full Access Included with Plan"}
+                </span>
+              ) : savedPercentile !== null ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-2xs">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" /> Saved Percentile: {savedPercentile.toFixed(2)}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-2xs">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" /> Preference List Unlocked
+                </span>
+              )
             )}
           </div>
 
@@ -397,7 +425,7 @@ export default function PreferenceListGeneratorPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold text-slate-700">Enter Percentile</label>
-                {isPaid && (
+                {isPaid && savedPercentile !== null && (
                   <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                     Locked for {capRound}
                   </span>
@@ -408,12 +436,12 @@ export default function PreferenceListGeneratorPage() {
                 step="0.01"
                 min="0"
                 max="100"
-                disabled={isPaid}
+                disabled={isPaid && savedPercentile !== null}
                 placeholder="e.g. 95.63"
                 value={percentile}
                 onChange={(e) => setPercentile(e.target.value)}
                 className={`w-full rounded-xl border px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 shadow-2xs transition-all focus:outline-none focus:ring-2 ${
-                  isPaid
+                  isPaid && savedPercentile !== null
                     ? "bg-slate-100 border-slate-200 cursor-not-allowed font-bold"
                     : "border-slate-200 bg-white focus:border-blue-500 focus:ring-blue-500/20"
                 }`}

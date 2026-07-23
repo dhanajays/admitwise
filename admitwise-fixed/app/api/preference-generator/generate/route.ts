@@ -32,7 +32,14 @@ export async function POST(req: Request) {
 
     if (session && session.user) {
       try {
-        if (db && (db as any).preferenceGeneratorPurchase) {
+        const userRecord = await db.user.findUnique({
+          where: { id: session.user.id },
+          select: { currentPlan: true },
+        })
+
+        if (userRecord && (userRecord.currentPlan === "premium" || userRecord.currentPlan === "elite")) {
+          isPaid = true
+        } else if (db && (db as any).preferenceGeneratorPurchase) {
           const purchase = await db.preferenceGeneratorPurchase.findUnique({
             where: {
               userId_round: {
@@ -45,12 +52,12 @@ export async function POST(req: Request) {
           if (purchase && purchase.status === "Paid") {
             isPaid = true
             savedPercentile = purchase.savedPercentile
-            // Override input percentile with saved locked percentile once paid
+            // Override input percentile with saved locked percentile ONLY for ₹599 single-round purchases
             percentile = purchase.savedPercentile
           }
         }
       } catch (e) {
-        console.error("Error looking up purchase record in generate API:", e)
+        console.error("Error looking up user plan or purchase record in generate API:", e)
         isPaid = false
       }
     }
