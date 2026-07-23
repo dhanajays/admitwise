@@ -638,3 +638,83 @@ export async function getPreferenceListAccess(userId: string): Promise<Preferenc
     purchases: purchasesList,
   }
 }
+
+export interface EntitlementResult {
+  hasAccess: boolean
+  previewOnly: boolean
+  pdfEnabled: boolean
+  isFullPlan: boolean
+  planName: string
+  allowedRounds: string[]
+  savedPercentiles: number[]
+  reason?: string
+}
+
+export async function evaluatePreferenceListAccess(
+  userId: string,
+  selectedRound: string,
+  enteredPercentile: number
+): Promise<EntitlementResult> {
+  const access = await getPreferenceListAccess(userId)
+
+  if (access.isFullPlan) {
+    return {
+      hasAccess: true,
+      previewOnly: false,
+      pdfEnabled: true,
+      isFullPlan: true,
+      planName: access.planName,
+      allowedRounds: ["Round 1", "Round 2", "Round 3", "Round 4"],
+      savedPercentiles: access.savedPercentiles,
+    }
+  }
+
+  // 1. Evaluate whether the selected CAP Round has been purchased
+  const isRoundPurchased = access.allowedRounds.includes(selectedRound) || access.allowedRounds.includes("ALL")
+
+  if (!isRoundPurchased) {
+    // RULE 2: Unpaid CAP Round -> ALWAYS Preview Mode (Top 5 Colleges, PDF Disabled, Purchase CTA)
+    return {
+      hasAccess: false,
+      previewOnly: true,
+      pdfEnabled: false,
+      isFullPlan: false,
+      planName: access.planName,
+      allowedRounds: access.allowedRounds,
+      savedPercentiles: access.savedPercentiles,
+      reason: `CAP Round '${selectedRound}' has not been purchased for ₹599.`,
+    }
+  }
+
+  // 2. CAP Round IS purchased! Check if enteredPercentile matches saved percentiles or if a slot is available
+  const isPercentileSaved = access.savedPercentiles.some(
+    (sp) => Math.abs(sp - enteredPercentile) < 0.001
+  )
+
+  const hasSlotAvailable = access.usedSlots < access.totalMaxSlots || access.savedPercentiles.length === 0
+
+  if (isPercentileSaved || hasSlotAvailable) {
+    // RULE 1 & RULE 4: Round Purchased AND Valid/New Saved Percentile -> FULL UNLOCKED ACCESS!
+    return {
+      hasAccess: true,
+      previewOnly: false,
+      pdfEnabled: true,
+      isFullPlan: false,
+      planName: access.planName,
+      allowedRounds: access.allowedRounds,
+      savedPercentiles: access.savedPercentiles,
+    }
+  }
+
+  // Mismatched percentile on a purchased round with all slots exhausted
+  return {
+    hasAccess: false,
+    previewOnly: true,
+    pdfEnabled: false,
+    isFullPlan: false,
+    planName: access.planName,
+    allowedRounds: access.allowedRounds,
+    savedPercentiles: access.savedPercentiles,
+    reason: `All saved percentile slots are used (${access.savedPercentiles.join("%, ")}%).`,
+  }
+}
