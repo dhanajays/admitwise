@@ -220,15 +220,18 @@ export default function PreferenceListGeneratorPage() {
           usedSlots: data.usedSlots || 0,
           remainingSlots: data.remainingSlots || 0,
           savedPercentiles: data.savedPercentiles || [],
+          allowedRounds: data.allowedRounds || [],
+          purchases: data.purchases || [],
         })
-        setIsPaid(!!data.hasAccess)
+        const isRoundAllowed = !!data.isIncludedInPlan || (Array.isArray(data.allowedRounds) && data.allowedRounds.includes(capRound))
+        setIsPaid(isRoundAllowed)
         setIsIncludedInPlan(!!data.isIncludedInPlan)
         setPlanName(data.planName || "")
       }
     } catch (err) {
       console.error("Error checking slot purchase status:", err)
     }
-  }, [session])
+  }, [session, capRound])
 
   useEffect(() => {
     checkPurchase()
