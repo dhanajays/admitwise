@@ -135,7 +135,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { action, userId, planId, limit, isSuspended, password } = await req.json()
+    const body = await req.json()
+    const { action, userId, planId, limit, isSuspended, password } = body
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
@@ -563,9 +564,15 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
-  } catch (error) {
-    console.error("Error in /api/admin/users POST:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+  } catch (error: any) {
+    console.error("========== FULL ERROR ==========")
+    console.error(error)
+    console.error(error?.stack)
+    console.error(error?.code)
+    console.error(error?.meta)
+    console.error(error?.cause)
+    console.error("===============================")
+    return NextResponse.json({ success: false, error: error?.message || "Internal Server Error" }, { status: 500 })
   }
 }
 
