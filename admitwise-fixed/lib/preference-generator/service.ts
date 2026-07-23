@@ -315,18 +315,7 @@ export class PreferenceGeneratorService {
 
     const deduplicatedOpen = Array.from(openMap.values())
 
-    // Engine 1 Stage Ranges (Dream, Target, Safe calculated against Open Cutoffs!)
-    const targetMin = Math.max(0, percentile - 5)
-    const safeMin = Math.max(0, percentile - 15)
-
-    function getStageTag(cp: number): "Dream" | "Target" | "Safe" | null {
-      if (cp > percentile && cp <= 100) return "Dream"
-      if (cp <= percentile && cp >= targetMin) return "Target"
-      if (cp < targetMin && cp >= safeMin) return "Safe"
-      return null
-    }
-
-    // Normalize & Deduplicate Student Branch Priorities into Branch Groups
+    // 3. Normalize & Deduplicate Student Branch Priorities into Branch Groups
     const selectedGroupMap = new Map<string, { groupId: string; displayName: string; matchedAliases: string[] }>()
     const orderedBranchGroups: { groupId: string; displayName: string; matchedAliases: string[] }[] = []
 
@@ -338,31 +327,88 @@ export class PreferenceGeneratorService {
       }
     }
 
+    // 4. Group Open records by College & calculate CollegeScore (Max Open Cutoff among student's preferred branches)
+    interface CollegeGroup {
+      collegeCode: string
+      collegeName: string
+      city: string
+      collegeScore: number
+      branchMap: Map<string, typeof deduplicatedOpen[0]>
+    }
+
+    const collegeGroupMap = new Map<string, CollegeGroup>()
+
+    for (const rec of deduplicatedOpen) {
+      const recBranchNorm = rec.branchName.trim().toLowerCase()
+      let matchedGroup: { groupId: string; displayName: string; matchedAliases: string[] } | null = null
+
+      for (const group of orderedBranchGroups) {
+        if (group.matchedAliases.some((a) => a.trim().toLowerCase() === recBranchNorm)) {
+          matchedGroup = group
+          break
+        }
+      }
+
+      if (!matchedGroup) continue // Skip branches not in student's preferred list
+
+      const colCode = rec.collegeCode
+      let colGroup = collegeGroupMap.get(colCode)
+
+      if (!colGroup) {
+        colGroup = {
+          collegeCode: colCode,
+          collegeName: rec.collegeName,
+          city: rec.city,
+          collegeScore: rec.closingPercentile,
+          branchMap: new Map(),
+        }
+        collegeGroupMap.set(colCode, colGroup)
+      }
+
+      // CollegeScore is the Highest Open Cutoff among student's preferred branches
+      if (rec.closingPercentile > colGroup.collegeScore) {
+        colGroup.collegeScore = rec.closingPercentile
+      }
+
+      const existingBranchRec = colGroup.branchMap.get(matchedGroup.groupId)
+      if (!existingBranchRec || rec.closingPercentile > existingBranchRec.closingPercentile) {
+        colGroup.branchMap.set(matchedGroup.groupId, rec)
+      }
+    }
+
+    // Sort Colleges by CollegeScore DESCENDING (Highest Open Cutoff first)
+    const rankedColleges = Array.from(collegeGroupMap.values()).sort((a, b) => b.collegeScore - a.collegeScore)
+
+    // 5. Engine 1 Stage Ranges (Dream, Target, Safe calculated against Open Cutoffs!)
+    const targetMin = Math.max(0, percentile - 5)
+    const safeMin = Math.max(0, percentile - 15)
+
+    function getStageTag(cp: number): "Dream" | "Target" | "Safe" | null {
+      if (cp > percentile && cp <= 100) return "Dream"
+      if (cp <= percentile && cp >= targetMin) return "Target"
+      if (cp < targetMin && cp >= safeMin) return "Safe"
+      return null
+    }
+
     const stages: ("Dream" | "Target" | "Safe")[] = ["Dream", "Target", "Safe"]
     const engine1Ranked: { stage: "Dream" | "Target" | "Safe"; openItem: typeof deduplicatedOpen[0] }[] = []
     const addedKeys = new Set<string>()
 
-    // Engine 1 Hierarchy: Stage -> Branch Group Priority -> Closing Percentile DESC
+    // 6. College-First Ranking: Stage -> College (by CollegeScore DESC) -> Student Branch Priority Order
     for (const stage of stages) {
-      for (const group of orderedBranchGroups) {
-        const aliasNormSet = new Set(group.matchedAliases.map((a) => a.trim().toLowerCase()))
+      for (const col of rankedColleges) {
+        for (const group of orderedBranchGroups) {
+          const rec = col.branchMap.get(group.groupId)
+          if (!rec) continue
 
-        const bucket = deduplicatedOpen.filter((rec) => {
           const stageTag = getStageTag(rec.closingPercentile)
-          if (stageTag !== stage) return false
-          if (!aliasNormSet.has(rec.branchName.trim().toLowerCase())) return false
+          if (stageTag !== stage) continue
 
-          const dedupeKey = `${stage}_${rec.collegeCode}_${group.groupId}`
-          return !addedKeys.has(dedupeKey)
-        })
-
-        // Sort bucket by Open closingPercentile DESCENDING
-        bucket.sort((a, b) => b.closingPercentile - a.closingPercentile)
-
-        for (const item of bucket) {
-          const dedupeKey = `${stage}_${item.collegeCode}_${group.groupId}`
+          const dedupeKey = `${stage}_${col.collegeCode}_${group.groupId}`
+          if (addedKeys.has(dedupeKey)) continue
           addedKeys.add(dedupeKey)
-          engine1Ranked.push({ stage, openItem: item })
+
+          engine1Ranked.push({ stage, openItem: rec })
         }
       }
     }
