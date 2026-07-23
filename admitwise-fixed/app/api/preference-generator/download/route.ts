@@ -47,24 +47,28 @@ export async function POST(req: Request) {
         },
       })
       if (purchase && purchase.status === "Paid") {
-        isPaid = true
-        percentile = purchase.savedPercentile
+        if (Math.abs(purchase.savedPercentile - percentile) < 0.05) {
+          isPaid = true
+          percentile = purchase.savedPercentile
+        }
       }
     }
 
     if (!isPaid) {
       return NextResponse.json(
-        { error: `You must unlock ${round} before downloading the PDF preference list.` },
+        { error: `You must unlock ${round} for percentile ${percentile}% before downloading the PDF preference list.` },
         { status: 403 }
       )
     }
 
-    const items = await PreferenceGeneratorService.generatePreferenceList({
+    const result = await PreferenceGeneratorService.generatePreferenceList({
       percentile,
       round,
       preferredBranches,
       preferredCities,
     })
+
+    const items = result.items || []
 
     const doc = await generatePreferencePDF(
       items,

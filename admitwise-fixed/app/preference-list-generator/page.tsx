@@ -368,19 +368,24 @@ export default function PreferenceListGeneratorPage() {
   const handleDownloadPDF = async () => {
     if (!isPaid) return
     setDownloading(true)
+    setErrorMsg(null)
     try {
+      const targetPercentile = savedPercentile || parseFloat(percentile)
       const res = await fetch("/api/preference-generator/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          percentile: savedPercentile || parseFloat(percentile),
+          percentile: targetPercentile,
           round: capRound,
           preferredBranches,
           preferredCities,
         }),
       })
 
-      if (!res.ok) throw new Error("Failed to generate PDF")
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || "Failed to generate PDF")
+      }
 
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)

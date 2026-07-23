@@ -7,21 +7,18 @@ export async function generatePreferencePDF(
   input: PreferenceInput,
   userName?: string | null
 ) {
-  // 1. Fetch Logo
+  // 1. Fetch Logo safely on server-side
   let logoDataUrl: string | null = null
   try {
-    const response = await fetch("/images/logo.png")
-    if (response.ok) {
-      const blob = await response.blob()
-      logoDataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onloadend = () => resolve(reader.result as string)
-        reader.onerror = reject;
-        reader.readAsDataURL(blob)
-      })
+    const fs = await import("fs")
+    const path = await import("path")
+    const logoPath = path.join(process.cwd(), "public", "images", "logo.png")
+    if (fs.existsSync(logoPath)) {
+      const logoBuffer = fs.readFileSync(logoPath)
+      logoDataUrl = `data:image/png;base64,${logoBuffer.toString("base64")}`
     }
   } catch (err) {
-    console.warn("Failed to load logo for PDF", err)
+    console.warn("Failed to load logo for PDF:", err)
   }
 
   // 2. Initialize PDF
