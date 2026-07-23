@@ -391,8 +391,16 @@ export default function PreferenceListGeneratorPage() {
         return
       }
 
+      const razorpayKey = orderData.key || orderData.keyId
+
+      if (!razorpayKey) {
+        throw new Error("Razorpay Key ID missing from server response. Please check server environment configuration.")
+      }
+
+      console.log("ℹ️ Initializing Razorpay Checkout with Key ID:", razorpayKey.slice(0, 8) + "...", "for Order ID:", orderData.id)
+
       const options = {
-        key: orderData.key,
+        key: razorpayKey,
         amount: orderData.amount,
         currency: orderData.currency,
         name: "AdmitWise",

@@ -95,8 +95,17 @@ export async function checkout({
         return
       }
 
+      const razorpayKey = orderData.key || orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+
+      if (!razorpayKey) {
+        const err = new Error("Razorpay Key ID is missing from server response. Please verify environment configuration.")
+        if (onError) onError(err.message)
+        reject(err)
+        return
+      }
+
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || orderData.key,
+        key: razorpayKey,
         amount: orderData.amount,
         currency: orderData.currency,
         name: "AdmitWise",

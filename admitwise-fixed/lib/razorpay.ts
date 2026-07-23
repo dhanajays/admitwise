@@ -9,25 +9,59 @@ export function getRazorpayCredentialsForProduct(productType?: string | null) {
     pType === "599" ||
     pType === "addon_pref"
 
+  let keyId = ""
+  let keySecret = ""
+  let isTest = false
+
   if (isPreferenceList) {
-    const keyId =
+    // Prefer test credentials for preference list if available
+    keyId =
       process.env.RAZORPAY_TEST_KEY_ID ||
       process.env.NEXT_PUBLIC_RAZORPAY_TEST_KEY_ID ||
       ""
-    const keySecret = process.env.RAZORPAY_TEST_KEY_SECRET || ""
-    return { keyId, keySecret, isTest: true }
+    keySecret = process.env.RAZORPAY_TEST_KEY_SECRET || ""
+
+    if (keyId && keySecret) {
+      isTest = true
+    } else {
+      // Fallback to standard/live credentials if test keys are not configured
+      keyId =
+        process.env.RAZORPAY_LIVE_KEY_ID ||
+        process.env.RAZORPAY_KEY_ID ||
+        process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+        ""
+      keySecret =
+        process.env.RAZORPAY_LIVE_KEY_SECRET ||
+        process.env.RAZORPAY_KEY_SECRET ||
+        ""
+      isTest = false
+    }
+  } else {
+    // Live credentials for Premium/Elite plans
+    keyId =
+      process.env.RAZORPAY_LIVE_KEY_ID ||
+      process.env.RAZORPAY_KEY_ID ||
+      process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+      ""
+    keySecret =
+      process.env.RAZORPAY_LIVE_KEY_SECRET ||
+      process.env.RAZORPAY_KEY_SECRET ||
+      ""
+
+    if (!keyId || !keySecret) {
+      // Fallback to test credentials if live keys are not configured
+      keyId =
+        process.env.RAZORPAY_TEST_KEY_ID ||
+        process.env.NEXT_PUBLIC_RAZORPAY_TEST_KEY_ID ||
+        ""
+      keySecret = process.env.RAZORPAY_TEST_KEY_SECRET || ""
+      if (keyId && keySecret) {
+        isTest = true
+      }
+    }
   }
 
-  const keyId =
-    process.env.RAZORPAY_LIVE_KEY_ID ||
-    process.env.RAZORPAY_KEY_ID ||
-    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
-    ""
-  const keySecret =
-    process.env.RAZORPAY_LIVE_KEY_SECRET ||
-    process.env.RAZORPAY_KEY_SECRET ||
-    ""
-  return { keyId, keySecret, isTest: false }
+  return { keyId, keySecret, isTest }
 }
 
 export function getRazorpayKeyId(productType?: string | null): string {
@@ -39,6 +73,12 @@ export function getRazorpay(productType?: string | null) {
   const { keyId, keySecret, isTest } = getRazorpayCredentialsForProduct(productType)
 
   if (!keyId || !keySecret) {
+    console.error("❌ Missing Razorpay environment variables!", {
+      RAZORPAY_LIVE_KEY_ID_EXISTS: !!process.env.RAZORPAY_LIVE_KEY_ID,
+      RAZORPAY_TEST_KEY_ID_EXISTS: !!process.env.RAZORPAY_TEST_KEY_ID,
+      RAZORPAY_KEY_ID_EXISTS: !!process.env.RAZORPAY_KEY_ID,
+      NEXT_PUBLIC_RAZORPAY_KEY_ID_EXISTS: !!process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+    })
     throw new Error("Missing Razorpay environment variables")
   }
 
@@ -56,10 +96,10 @@ export async function createRazorpayOrder(
 ) {
   const { keyId, keySecret, isTest } = getRazorpayCredentialsForProduct(productType)
 
-  if (isTest) {
-    console.log("Creating TEST Razorpay order for Preference List ₹599")
-  } else {
-    console.log("Creating LIVE Razorpay order for Premium/Elite")
+  console.log(`ℹ️ Creating ${isTest ? "TEST" : "LIVE"} Razorpay order for '${productType || "general"}' (Key ID: ${keyId ? keyId.slice(0, 8) + "..." : "MISSING"})`)
+
+  if (!keyId || !keySecret) {
+    console.error("❌ Cannot create Razorpay Order: Key ID or Key Secret is missing in server environment variables!")
   }
 
   // Check for mock mode in dev if keys missing
@@ -74,7 +114,8 @@ export async function createRazorpayOrder(
       receipt: receiptId,
       status: "created",
       mock: true,
-      keyId,
+      keyId: keyId || "mock_key_id",
+      key: keyId || "mock_key_id",
       isTest,
     }
   }
@@ -90,6 +131,7 @@ export async function createRazorpayOrder(
       ...order,
       mock: false,
       keyId,
+      key: keyId,
       isTest,
     }
   } catch (error: any) {

@@ -83,12 +83,15 @@ export async function POST(req: Request) {
       },
     })
 
+    const activeKey = order.keyId || order.key || getRazorpayKeyId("preference_generator")
+
     return NextResponse.json({
       id: order.id,
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      key: order.keyId || getRazorpayKeyId("preference_generator"),
+      key: activeKey,
+      keyId: activeKey,
       mock: (order as any).mock || false,
       user: {
         name: session.user.name,
