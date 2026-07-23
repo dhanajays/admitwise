@@ -391,13 +391,18 @@ export default function PreferenceListGeneratorPage() {
         return
       }
 
-      const razorpayKey = orderData.key || orderData.keyId
+      const razorpayKey = orderData.keyId || orderData.key
 
       if (!razorpayKey) {
         throw new Error("Razorpay Key ID missing from server response. Please check server environment configuration.")
       }
 
-      console.log("ℹ️ Initializing Razorpay Checkout with Key ID:", razorpayKey.slice(0, 8) + "...", "for Order ID:", orderData.id)
+      console.log("ℹ️ [FRONTEND CHECKOUT LOG]")
+      console.log("Selected Plan: Preference List ₹599")
+      console.log("Using TEST Razorpay:", razorpayKey.startsWith("rzp_test_"))
+      console.log("Selected Key ID:", razorpayKey)
+      console.log("Order Created:", orderData.id)
+      console.log("Order Account:", razorpayKey.startsWith("rzp_test_") ? "TEST" : "LIVE")
 
       const options = {
         key: razorpayKey,

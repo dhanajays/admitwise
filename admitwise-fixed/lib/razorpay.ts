@@ -6,62 +6,42 @@ export function getRazorpayCredentialsForProduct(productType?: string | null) {
   const isPreferenceList =
     pType.includes("preference") ||
     pType.includes("pref") ||
-    pType === "599" ||
+    pType.includes("599") ||
     pType === "addon_pref"
 
-  let keyId = ""
-  let keySecret = ""
-  let isTest = false
-
   if (isPreferenceList) {
-    // Prefer test credentials for preference list if available
-    keyId =
+    // ENFORCE TEST MODE ONLY FOR ₹599 PREFERENCE LIST
+    const testKeyId =
       process.env.RAZORPAY_TEST_KEY_ID ||
       process.env.NEXT_PUBLIC_RAZORPAY_TEST_KEY_ID ||
-      ""
-    keySecret = process.env.RAZORPAY_TEST_KEY_SECRET || ""
+      "rzp_test_TH3gw79Ps4yl9K"
+    const testKeySecret =
+      process.env.RAZORPAY_TEST_KEY_SECRET ||
+      "bwye64I1huGjsIRgoH7zfJ6j"
 
-    if (keyId && keySecret) {
-      isTest = true
-    } else {
-      // Fallback to standard/live credentials if test keys are not configured
-      keyId =
-        process.env.RAZORPAY_LIVE_KEY_ID ||
-        process.env.RAZORPAY_KEY_ID ||
-        process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
-        ""
-      keySecret =
-        process.env.RAZORPAY_LIVE_KEY_SECRET ||
-        process.env.RAZORPAY_KEY_SECRET ||
-        ""
-      isTest = false
-    }
-  } else {
-    // Live credentials for Premium/Elite plans
-    keyId =
-      process.env.RAZORPAY_LIVE_KEY_ID ||
-      process.env.RAZORPAY_KEY_ID ||
-      process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
-      ""
-    keySecret =
-      process.env.RAZORPAY_LIVE_KEY_SECRET ||
-      process.env.RAZORPAY_KEY_SECRET ||
-      ""
-
-    if (!keyId || !keySecret) {
-      // Fallback to test credentials if live keys are not configured
-      keyId =
-        process.env.RAZORPAY_TEST_KEY_ID ||
-        process.env.NEXT_PUBLIC_RAZORPAY_TEST_KEY_ID ||
-        ""
-      keySecret = process.env.RAZORPAY_TEST_KEY_SECRET || ""
-      if (keyId && keySecret) {
-        isTest = true
-      }
+    return {
+      keyId: testKeyId,
+      keySecret: testKeySecret,
+      isTest: true,
     }
   }
 
-  return { keyId, keySecret, isTest }
+  // ENFORCE LIVE MODE ONLY FOR ₹5000 PREMIUM & ₹6000 ELITE PLANS
+  const liveKeyId =
+    process.env.RAZORPAY_LIVE_KEY_ID ||
+    process.env.RAZORPAY_KEY_ID ||
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+    "rzp_live_T8xY9cnpDvuIet"
+  const liveKeySecret =
+    process.env.RAZORPAY_LIVE_KEY_SECRET ||
+    process.env.RAZORPAY_KEY_SECRET ||
+    "w9KHRXh5I7v0pozqBZwBCRIi"
+
+  return {
+    keyId: liveKeyId,
+    keySecret: liveKeySecret,
+    isTest: false,
+  }
 }
 
 export function getRazorpayKeyId(productType?: string | null): string {
@@ -73,12 +53,7 @@ export function getRazorpay(productType?: string | null) {
   const { keyId, keySecret, isTest } = getRazorpayCredentialsForProduct(productType)
 
   if (!keyId || !keySecret) {
-    console.error("❌ Missing Razorpay environment variables!", {
-      RAZORPAY_LIVE_KEY_ID_EXISTS: !!process.env.RAZORPAY_LIVE_KEY_ID,
-      RAZORPAY_TEST_KEY_ID_EXISTS: !!process.env.RAZORPAY_TEST_KEY_ID,
-      RAZORPAY_KEY_ID_EXISTS: !!process.env.RAZORPAY_KEY_ID,
-      NEXT_PUBLIC_RAZORPAY_KEY_ID_EXISTS: !!process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-    })
+    console.error("❌ Missing Razorpay environment variables!", { productType, isTest })
     throw new Error("Missing Razorpay environment variables")
   }
 
@@ -96,26 +71,28 @@ export async function createRazorpayOrder(
 ) {
   const { keyId, keySecret, isTest } = getRazorpayCredentialsForProduct(productType)
 
-  console.log(`ℹ️ Creating ${isTest ? "TEST" : "LIVE"} Razorpay order for '${productType || "general"}' (Key ID: ${keyId ? keyId.slice(0, 8) + "..." : "MISSING"})`)
-
-  if (!keyId || !keySecret) {
-    console.error("❌ Cannot create Razorpay Order: Key ID or Key Secret is missing in server environment variables!")
-  }
+  console.log(`ℹ️ [RAZORPAY ORDER CREATION]`)
+  console.log(`Selected Plan: ${productType || "general"}`)
+  console.log(`Using TEST Razorpay: ${isTest}`)
+  console.log(`Selected Key ID: ${keyId}`)
+  console.log(`Order Account: ${isTest ? "TEST" : "LIVE"}`)
 
   // Check for mock mode in dev if keys missing
   const isMocked =
     process.env.NODE_ENV !== "production" && (!keyId || !keySecret || keyId.includes("mock"))
 
   if (isMocked) {
+    const mockOrderId = `order_mock_${Math.random().toString(36).substring(2, 12)}`
+    console.log(`Order Created: ${mockOrderId}`)
     return {
-      id: `order_mock_${Math.random().toString(36).substring(2, 12)}`,
+      id: mockOrderId,
       amount: Math.round(amount * 100),
       currency: "INR",
       receipt: receiptId,
       status: "created",
       mock: true,
-      keyId: keyId || "mock_key_id",
-      key: keyId || "mock_key_id",
+      keyId,
+      key: keyId,
       isTest,
     }
   }
@@ -127,6 +104,7 @@ export async function createRazorpayOrder(
       currency: "INR",
       receipt: receiptId,
     })
+    console.log(`Order Created: ${order.id}`)
     return {
       ...order,
       mock: false,
@@ -166,21 +144,13 @@ export function verifyRazorpaySignature(
       return true
     }
 
-    // Check alternate keySecret from environment variables if productType was omitted
+    // Defensive fallback: check alternate keySecret if productType wasn't passed explicitly
     const alternateSecret =
-      process.env.RAZORPAY_TEST_KEY_SECRET === keySecret
-        ? process.env.RAZORPAY_LIVE_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET
-        : process.env.RAZORPAY_TEST_KEY_SECRET
+      process.env.RAZORPAY_TEST_KEY_SECRET || "bwye64I1huGjsIRgoH7zfJ6j"
 
-    if (alternateSecret) {
-      const altHmac = crypto.createHmac("sha256", alternateSecret)
-      altHmac.update(`${orderId}|${paymentId}`)
-      if (altHmac.digest("hex") === signature) {
-        return true
-      }
-    }
-
-    return false
+    const altHmac = crypto.createHmac("sha256", alternateSecret)
+    altHmac.update(`${orderId}|${paymentId}`)
+    return altHmac.digest("hex") === signature
   } catch (error) {
     console.error("❌ Razorpay Signature Verification failed:", error)
     return false

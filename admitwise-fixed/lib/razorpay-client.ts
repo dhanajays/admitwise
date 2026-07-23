@@ -95,7 +95,7 @@ export async function checkout({
         return
       }
 
-      const razorpayKey = orderData.key || orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+      const razorpayKey = orderData.keyId || orderData.key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
 
       if (!razorpayKey) {
         const err = new Error("Razorpay Key ID is missing from server response. Please verify environment configuration.")
@@ -103,6 +103,13 @@ export async function checkout({
         reject(err)
         return
       }
+
+      console.log("ℹ️ [FRONTEND CHECKOUT LOG]")
+      console.log("Selected Plan:", planId || purchaseType)
+      console.log("Using TEST Razorpay:", razorpayKey.startsWith("rzp_test_"))
+      console.log("Selected Key ID:", razorpayKey)
+      console.log("Order Created:", orderData.id || orderData.orderId)
+      console.log("Order Account:", razorpayKey.startsWith("rzp_test_") ? "TEST" : "LIVE")
 
       const options = {
         key: razorpayKey,
