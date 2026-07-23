@@ -31,33 +31,66 @@ export async function POST(req: Request) {
     let { percentile, round, preferredBranches, preferredCities, category, gender, pwd } = parsed.data
 
     const session = (await getServerSession(authOptions)) as CustomSession | null
-    let isPaid = false
+
+    // STEP 1: Entitlement decision BEFORE generating preference list
     let entitlement: EntitlementResult | null = null
+    let statusState: "UNPAID_ROUND" | "PAID_ROUND_SAVED_PERCENTILE" | "PAID_ROUND_UNSAVED_PERCENTILE" = "UNPAID_ROUND"
 
     if (session && session.user) {
       try {
         entitlement = await evaluatePreferenceListAccess(session.user.id, round, percentile)
-
-        if (entitlement.statusState === "PAID_ROUND_UNSAVED_PERCENTILE") {
-          return NextResponse.json(
-            {
-              success: false,
-              error: entitlement.message || "You don't have this percentile saved. Purchase +1 Saved Percentile (₹599) to use this percentile.",
-              isBlockedPercentile: true,
-              entitlement,
-            },
-            { status: 400 }
-          )
-        }
-
-        isPaid = entitlement.statusState === "PAID_ROUND_SAVED_PERCENTILE"
+        statusState = entitlement.statusState
       } catch (e) {
         console.error("Error evaluating central preference entitlement in generate API:", e)
-        isPaid = false
+        statusState = "UNPAID_ROUND"
       }
     }
 
-    const result = await PreferenceGeneratorService.generatePreferenceList({
+    // DECISION 1: CAP Round IS purchased BUT percentile is NOT saved (Rule 6)
+    if (statusState === "PAID_ROUND_UNSAVED_PERCENTILE") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: entitlement?.message || "You don't have this percentile saved. Purchase +1 Saved Percentile (₹599) to use this percentile.",
+          isBlockedPercentile: true,
+          entitlement,
+        },
+        { status: 400 }
+      )
+    }
+
+    // DECISION 2: CAP Round is NOT purchased (Rule 2, 7 & 9) -> UNPAID_ROUND
+    if (statusState === "UNPAID_ROUND") {
+      // Backend returns ONLY preview data (first 5 colleges)
+      const previewResult = await PreferenceGeneratorService.generatePreferenceList(
+        {
+          percentile,
+          round,
+          preferredBranches,
+          preferredCities,
+          category,
+          gender,
+          pwd,
+        },
+        5 // Pass limit = 5 to ensure backend ONLY processes and returns top 5 preview items
+      )
+
+      const items = (previewResult.items || []).slice(0, 5)
+
+      return NextResponse.json({
+        success: true,
+        isPaid: false,
+        isPreview: true,
+        isIncludedInPlan: false,
+        totalCount: previewResult.items?.length || items.length,
+        previewCount: items.length,
+        items,
+        entitlement,
+      })
+    }
+
+    // DECISION 3: CAP Round IS purchased AND percentile IS saved (Rule 3, 4, 5) -> PAID_ROUND_SAVED_PERCENTILE
+    const fullResult = await PreferenceGeneratorService.generatePreferenceList({
       percentile,
       round,
       preferredBranches,
@@ -67,17 +100,14 @@ export async function POST(req: Request) {
       pwd,
     })
 
-    if (result.error) {
+    if (fullResult.error) {
       return NextResponse.json(
-        { success: false, error: result.error },
+        { success: false, error: fullResult.error },
         { status: 400 }
       )
     }
 
-    const allItems = result.items || []
-    const totalCount = allItems.length
-    const previewCount = isPaid ? totalCount : Math.min(5, totalCount)
-    const items = isPaid ? allItems : allItems.slice(0, 5)
+    const allItems = fullResult.items || []
 
     // Save Generation History for authenticated student
     if (session && session.user && session.user.id) {
@@ -90,7 +120,7 @@ export async function POST(req: Request) {
               round,
               preferredBranches: JSON.stringify(preferredBranches),
               preferredCities: JSON.stringify(preferredCities),
-              collegesGenerated: totalCount,
+              collegesGenerated: allItems.length,
               downloadedPdf: false,
             },
           })
@@ -102,12 +132,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      isPaid,
-      isPreview: !isPaid,
+      isPaid: true,
+      isPreview: false,
       isIncludedInPlan: entitlement?.isFullPlan || false,
-      totalCount,
-      previewCount,
-      items,
+      totalCount: allItems.length,
+      previewCount: allItems.length,
+      items: allItems,
       entitlement,
     })
   } catch (error: any) {

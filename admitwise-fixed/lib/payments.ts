@@ -131,12 +131,19 @@ export async function fulfillSuccessfulPayment(orderId: string, paymentId: strin
       updatedPayment.purchaseType?.startsWith("preference") ||
       updatedPayment.planId === "preference_generator"
     ) {
-      planName = "Preference List Generator (₹599)"
+      let purchasedRound = "Round 1"
+      if (updatedPayment.purchaseType && updatedPayment.purchaseType.startsWith("preference_")) {
+        const rawRound = updatedPayment.purchaseType.replace("preference_", "").replace(/_/g, " ")
+        if (rawRound.toLowerCase().includes("round")) {
+          purchasedRound = rawRound.replace(/\b\w/g, (l) => l.toUpperCase())
+        }
+      }
+      planName = `Preference List Generator (₹599) - ${purchasedRound}`
 
       const purchaseModel = (tx as any)?.preferenceGeneratorPurchase || (db as any)?.preferenceGeneratorPurchase
       if (purchaseModel) {
         const existing = purchaseModel.findFirst
-          ? await purchaseModel.findFirst({ where: { userId: updatedPayment.userId, round: "ALL" } })
+          ? await purchaseModel.findFirst({ where: { userId: updatedPayment.userId, round: purchasedRound } })
           : null
 
         if (existing && purchaseModel.update) {
@@ -148,7 +155,7 @@ export async function fulfillSuccessfulPayment(orderId: string, paymentId: strin
           await purchaseModel.create({
             data: {
               userId: updatedPayment.userId,
-              round: "ALL",
+              round: purchasedRound,
               status: "Paid",
               amount: updatedPayment.amount || 599,
               paymentId: updatedPayment.paymentId,
@@ -610,12 +617,13 @@ export async function getPreferenceListAccess(userId: string): Promise<Preferenc
   if (isFullPlan) {
     allowedRounds = ["Round 1", "Round 2", "Round 3", "Round 4"]
   } else {
-    const hasAll = paidPurchases.some((p) => p.round === "ALL")
-    if (hasAll) {
-      allowedRounds = ["Round 1", "Round 2", "Round 3", "Round 4"]
-    } else {
-      allowedRounds = Array.from(new Set(paidPurchases.map((p) => p.round).filter(Boolean)))
-    }
+    allowedRounds = Array.from(
+      new Set(
+        paidPurchases
+          .map((p) => p.round)
+          .filter((r): r is string => Boolean(r) && r.startsWith("Round"))
+      )
+    )
   }
 
   if (!isFullPlan && paidPurchases.length > 0 && planName === "Free Plan") {

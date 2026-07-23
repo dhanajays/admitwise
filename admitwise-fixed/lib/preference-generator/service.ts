@@ -219,7 +219,8 @@ export class PreferenceGeneratorService {
    * Core Preference List Generation Algorithm following student percentile, CAP round, branch priorities (grouped by aliases), and city priorities.
    */
   static async generatePreferenceList(
-    input: PreferenceInput
+    input: PreferenceInput,
+    limit?: number
   ): Promise<{ items: PreferenceResultItem[]; error?: string }> {
     const { percentile, round, preferredBranches, preferredCities } = input
 
@@ -534,6 +535,7 @@ export class PreferenceGeneratorService {
       }
     })
 
-    return { items: finalResultList }
+    const items = typeof limit === "number" && limit > 0 ? finalResultList.slice(0, limit) : finalResultList
+    return { items }
   }
 }
