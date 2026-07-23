@@ -236,26 +236,8 @@ export default function PreferenceListGeneratorPage() {
       return
     }
 
-    // Guest Authentication Flow: Save form draft & redirect to login if not logged in
-    if (!session || !session.user) {
-      const draft = {
-        exam: "MHT CET PCM",
-        percentile: String(targetPercentile),
-        round: capRound,
-        preferredBranches,
-        preferredCities,
-      }
-      try {
-        sessionStorage.setItem("preferenceGeneratorDraft", JSON.stringify(draft))
-        localStorage.setItem("preferenceGeneratorDraft", JSON.stringify(draft))
-      } catch (e) {
-        console.error("Error saving draft to storage:", e)
-      }
-
-      window.location.href = `/login?callbackUrl=${encodeURIComponent("/preference-list-generator")}`
-      return
-    }
-
+    // No login redirect — guests can see a 5-college preview.
+    // Login is only required when they click "Unlock Now" to pay.
     setGenerating(true)
     try {
       const res = await fetch("/api/preference-generator/generate", {
@@ -483,8 +465,8 @@ export default function PreferenceListGeneratorPage() {
             )}
           </div>
 
-          {/* Saved Percentile Slots Bar */}
-          {session?.user && (
+          {/* Saved Percentile Slots Bar — only for Premium / Elite users (hasAccess with included slots) */}
+          {session?.user && slotStats.isIncludedInPlan && slotStats.totalMaxSlots > 0 && (
             <div className="rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-slate-50 border border-blue-100 p-4 space-y-3 shadow-2xs">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-blue-100/80 pb-2.5">
                 <div>
@@ -493,21 +475,17 @@ export default function PreferenceListGeneratorPage() {
                     Saved Percentiles ({slotStats.usedSlots} / {slotStats.totalMaxSlots} Slots Used)
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Valid for all CAP Rounds (Round 1–4) with unlimited regenerations.
+                    Each saved percentile profile unlocks unlimited regenerations across all CAP Rounds.
                   </p>
                 </div>
 
-                {slotStats.usedSlots >= slotStats.totalMaxSlots && slotStats.totalMaxSlots > 0 ? (
+                {slotStats.usedSlots >= slotStats.totalMaxSlots ? (
                   <span className="text-[10px] font-bold text-amber-700 bg-amber-100/90 px-2.5 py-1 rounded-full border border-amber-200">
-                    All Slots Used
-                  </span>
-                ) : slotStats.totalMaxSlots > 0 ? (
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2.5 py-1 rounded-full border border-emerald-200">
-                    {slotStats.remainingSlots} Slot{slotStats.remainingSlots === 1 ? "" : "s"} Available
+                    All {slotStats.totalMaxSlots} Slots Used
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
-                    No Slots Included
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2.5 py-1 rounded-full border border-emerald-200">
+                    {slotStats.remainingSlots} Slot{slotStats.remainingSlots === 1 ? "" : "s"} Available
                   </span>
                 )}
               </div>
@@ -517,7 +495,6 @@ export default function PreferenceListGeneratorPage() {
                 {slotStats.savedPercentiles.map((pVal) => {
                   const pStr = pVal.toFixed(2)
                   const isSelected = percentile === pStr || parseFloat(percentile) === pVal
-
                   return (
                     <button
                       key={pVal}
@@ -530,13 +507,13 @@ export default function PreferenceListGeneratorPage() {
                       }`}
                     >
                       <span>{pStr}%</span>
-                      <span className="text-[10px] opacity-75">🔒 Reusable</span>
+                      <span className="text-[10px] opacity-75">🔒 Unlimited</span>
                     </button>
                   )
                 })}
 
-                {/* Add-on Slot Purchase Trigger if slots full or free */}
-                {slotStats.usedSlots >= slotStats.totalMaxSlots && (
+                {/* +Buy slot button ONLY when ALL included slots are consumed */}
+                {slotStats.usedSlots >= slotStats.totalMaxSlots && slotStats.totalMaxSlots > 0 && (
                   <button
                     type="button"
                     onClick={handleUnlockPayment}
@@ -695,7 +672,11 @@ export default function PreferenceListGeneratorPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-card rounded-2xl p-5 bg-white border border-slate-200 shadow-md">
               <div>
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  Generated Preference List ({totalCount} Colleges)
+                  {isPaid ? (
+                    <>Generated Preference List ({totalCount} Colleges)</>
+                  ) : (
+                    <>Preview — First {Math.min(5, totalCount)} of {totalCount} Colleges</>
+                  )}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Ordered by Percentile Stage (Dream → Target → Safe), City Priority, and Branch Priority.
@@ -722,7 +703,7 @@ export default function PreferenceListGeneratorPage() {
                 </button>
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl">
-                  <Lock className="h-3.5 w-3.5" /> Free Preview Mode (First 5 Rows)
+                  <Lock className="h-3.5 w-3.5" /> Free Preview — 5 of {totalCount} Colleges
                 </span>
               )}
             </div>
@@ -792,51 +773,86 @@ export default function PreferenceListGeneratorPage() {
                 </motion.div>
               ))}
 
-              {/* Free Preview Lock & Paywall Overlay */}
+              {/* Unlock Card — shown after 5th college when user hasn't paid */}
               {!isPaid && totalCount > 5 && (
-                <div className="relative mt-4">
-                  {/* Blurred Cards Mockup Background */}
-                  <div className="space-y-3 blur-xs opacity-40 pointer-events-none select-none">
+                <div className="mt-6 rounded-2xl border border-blue-200 bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 shadow-2xl overflow-hidden">
+                  {/* Blurred ghost rows */}
+                  <div className="space-y-2.5 p-4 blur-sm opacity-30 pointer-events-none select-none">
                     {[6, 7, 8].map((dummyIdx) => (
-                      <div key={dummyIdx} className="glass-card rounded-xl p-4 bg-white border border-slate-200 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className="h-8 w-8 rounded-xl bg-slate-200" />
-                          <div className="space-y-2">
-                            <div className="h-3 w-48 bg-slate-200 rounded" />
-                            <div className="h-2.5 w-32 bg-slate-100 rounded" />
-                          </div>
+                      <div key={dummyIdx} className="flex items-center gap-3 rounded-xl bg-white/10 p-3">
+                        <span className="h-7 w-7 rounded-lg bg-white/20 shrink-0" />
+                        <div className="space-y-1.5 flex-1">
+                          <div className="h-2.5 w-2/3 bg-white/20 rounded" />
+                          <div className="h-2 w-1/3 bg-white/15 rounded" />
                         </div>
+                        <div className="h-5 w-14 rounded-full bg-white/15" />
                       </div>
                     ))}
                   </div>
 
-                  {/* Dark Glass Lock Overlay Card */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-700 shadow-2xl space-y-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                      <Lock className="h-6 w-6" />
+                  {/* Lock content */}
+                  <div className="flex flex-col items-center justify-center gap-5 p-8 text-center -mt-28 relative z-10">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-500/20 border border-blue-400/30 shadow-lg">
+                      <Lock className="h-6 w-6 text-blue-300" />
                     </div>
 
-                    <div className="space-y-1 max-w-md">
-                      <h3 className="text-xl font-extrabold text-white">
-                        Unlock Complete Preference List
+                    <div className="space-y-1.5">
+                      <h3 className="text-xl sm:text-2xl font-extrabold text-white">
+                        🔒 Unlock Remaining {totalCount - 5} Colleges
                       </h3>
-                      <p className="text-xs text-slate-300">
-                        Get all {totalCount} recommended colleges, unlimited branch & city priority edits for {capRound}, and downloadable PDF report.
+                      <p className="text-sm text-blue-200 max-w-md">
+                        Your personalised preference list has been generated. Unlock the complete report.
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-3 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-1.5 rounded-full">
-                      <CheckCircle2 className="h-4 w-4" /> Full Option Form • Only ₹599
+                    {/* Feature comparison */}
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs text-left">
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Preview (Free)</p>
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> First 5 Colleges
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-blue-300 mb-1">After Unlock</p>
+                        <div className="flex items-center gap-1.5 text-white font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> All {totalCount} Colleges
+                        </div>
+                        <div className="flex items-center gap-1.5 text-white font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> PDF Download
+                        </div>
+                        <div className="flex items-center gap-1.5 text-white font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> Unlimited Regeneration
+                        </div>
+                        <div className="flex items-center gap-1.5 text-white font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> Saved Percentile Profile
+                        </div>
+                        <div className="flex items-center gap-1.5 text-white font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> Valid for {capRound}
+                        </div>
+                      </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleUnlockPayment}
-                      disabled={purchasing}
-                      className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-3 text-sm font-extrabold text-white shadow-xl shadow-blue-500/25 transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50"
-                    >
-                      {purchasing ? "Processing Payment..." : "Unlock Now (₹599)"}
-                    </button>
+                    {/* Price & CTA */}
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-black text-white">₹599</span>
+                        <span className="text-sm text-blue-300">one-time</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleUnlockPayment}
+                        disabled={purchasing}
+                        className="rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-10 py-3.5 text-sm font-extrabold text-white shadow-xl shadow-blue-500/30 transition-all hover:scale-105 hover:shadow-blue-500/40 active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {purchasing ? (
+                          <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Processing...</>
+                        ) : (
+                          <>Unlock Now — ₹599</>
+                        )}
+                      </button>
+                      <p className="text-[10px] text-slate-400">Secure payment via Razorpay · One-time purchase</p>
+                    </div>
                   </div>
                 </div>
               )}

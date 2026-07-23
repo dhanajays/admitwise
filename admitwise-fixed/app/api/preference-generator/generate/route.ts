@@ -41,50 +41,38 @@ export async function POST(req: Request) {
         const slotStats = await getPreferenceSlotStats(session.user.id)
         isIncludedInPlan = slotStats.isIncludedInPlan
 
-        // Check if percentile matches an existing saved percentile profile (within 0.001 precision):
+        // Check if percentile matches an existing saved percentile profile (within 0.001 precision)
         const existingPercentile = slotStats.savedPercentiles.find(
           (sp) => Math.abs(sp - percentile) < 0.001
         )
 
         if (existingPercentile !== undefined) {
-          // Reusing existing Saved Percentile Profile -> Unlimited generations across ALL CAP rounds!
+          // Reusing existing Saved Percentile Profile → Unlimited generations across ALL CAP rounds!
           isPaid = true
           percentile = existingPercentile
           savedPercentile = existingPercentile
-        } else {
-          // New Percentile Profile
-          if (slotStats.usedSlots < slotStats.totalMaxSlots) {
-            // Save new percentile profile slot
-            if (db && (db as any).preferenceSavedPercentile) {
-              try {
-                await db.preferenceSavedPercentile.create({
-                  data: {
-                    userId: session.user.id,
-                    savedPercentile: percentile,
-                  },
-                })
-              } catch (saveErr) {
-                console.warn("Could not save to preferenceSavedPercentile:", saveErr)
-              }
+        } else if (slotStats.totalMaxSlots === 0) {
+          // No plan at all — guest/free user. Show 5 preview, no slot saving.
+          isPaid = false
+        } else if (slotStats.usedSlots < slotStats.totalMaxSlots) {
+          // Slots available — save new percentile profile and unlock full results
+          if (db && (db as any).preferenceSavedPercentile) {
+            try {
+              await db.preferenceSavedPercentile.create({
+                data: {
+                  userId: session.user.id,
+                  savedPercentile: percentile,
+                },
+              })
+            } catch (saveErr) {
+              console.warn("Could not save to preferenceSavedPercentile:", saveErr)
             }
-            isPaid = true
-            savedPercentile = percentile
-          } else {
-            // Slots Exhausted! Block creation of new percentile.
-            isPaid = false
-            const planText = slotStats.currentPlan === "premium" ? "your Premium Plan" : slotStats.currentPlan === "elite" ? "your Elite Plan" : "your account"
-            return NextResponse.json(
-              {
-                success: false,
-                isPaid: false,
-                isIncludedInPlan,
-                slotLimitExhausted: true,
-                error: `You have used all ${slotStats.totalMaxSlots} saved percentile slots included in ${planText}. Purchase +1 Saved Percentile (₹599) to continue.`,
-                slotStats,
-              },
-              { status: 403 }
-            )
           }
+          isPaid = true
+          savedPercentile = percentile
+        } else {
+          // All slots exhausted — show 5 preview so user can see value, then upsell +1 slot
+          isPaid = false
         }
       } catch (e) {
         console.error("Error evaluating preference slot stats in generate API:", e)
