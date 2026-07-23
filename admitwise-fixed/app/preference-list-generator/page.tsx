@@ -796,27 +796,33 @@ export default function PreferenceListGeneratorPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
-                    {/* Stage Tag */}
+                  <div className="flex flex-wrap items-center gap-3 self-end sm:self-center shrink-0">
+                    {/* Admission Chance Badge (Engine 2) */}
                     <span
                       className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shadow-2xs ${
-                        item.stageTag === "Dream" || item.stageTag === "Good"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : item.stageTag === "Target" || item.stageTag === "Moderate"
-                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                        item.chanceColor || "bg-blue-50 text-blue-700 border-blue-200"
                       }`}
                     >
-                      {item.stageTag} Match
+                      {item.chanceLabel || item.chance || "GOOD MATCH"}
                     </span>
 
-                    {/* Cutoff Percentile Display */}
-                    <div className="text-right">
-                      <div className="text-xs font-extrabold text-slate-900">
-                        {item.closingPercentile.toFixed(2)} %ile
+                    {/* Cutoffs Display: Open Ranking Cutoff + Candidate Category Cutoff */}
+                    <div className="text-right space-y-0.5 min-w-[125px]">
+                      {/* Open Ranking Cutoff */}
+                      <div className="text-xs font-semibold text-slate-600 flex items-center justify-end gap-1">
+                        <span className="text-[10px] text-slate-400 font-normal">Open:</span>
+                        <span>{(item.openClosingPercentile ?? item.closingPercentile).toFixed(2)}%</span>
                       </div>
+
+                      {/* Your Category Cutoff */}
+                      <div className="text-xs font-extrabold text-blue-600 flex items-center justify-end gap-1">
+                        <span className="text-[10px] text-blue-500/80 font-bold">{item.categoryUsed || "Your Category"}:</span>
+                        <span>{(item.categoryClosingPercentile ?? item.closingPercentile).toFixed(2)}%</span>
+                      </div>
+
+                      {/* Category Rank */}
                       <div className="text-[10px] text-slate-400">
-                        Rank: {item.closingRank > 0 ? item.closingRank : "N/A"}
+                        Rank: {item.categoryClosingRank > 0 ? item.categoryClosingRank : (item.openClosingRank || "N/A")}
                       </div>
                     </div>
                   </div>

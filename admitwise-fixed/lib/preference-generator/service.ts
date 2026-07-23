@@ -223,10 +223,11 @@ export class PreferenceGeneratorService {
   ): Promise<{ items: PreferenceResultItem[]; error?: string }> {
     const { percentile, round, preferredBranches, preferredCities } = input
 
-    // Destructure new optional filters (defaults: OPEN, Male, No)
+    // Candidate Profile Inputs
     const reqCategory = (input.category || "OPEN").trim().toUpperCase()
     const reqGender   = (input.gender || "Male").trim().toLowerCase()
     const reqPwd      = (input.pwd || "No").trim().toLowerCase()
+    const isFemale    = reqGender === "female"
 
     // 1. Load CSV dataset directly from the /dataset folder for the selected CAP Round
     const res = PreferenceDatasetLoader.loadDatasetForRound(round)
@@ -242,88 +243,79 @@ export class PreferenceGeneratorService {
 
     const selectedCitiesSet = new Set(preferredCities.map((c) => c.trim().toLowerCase()))
 
-    // 3. Apply City, Category, Gender, and PwD filters upfront
-    const rawCutoffs = res.records.filter((r) => {
-      // Must have valid closing percentile
+    // ========================================================
+    // ENGINE 1: Preference Ranking Engine
+    // Purpose: Rank colleges strictly based on academic quality (GOPENS / LOPENS), NOT reservation category.
+    // ========================================================
+    const openTargetCode = isFemale ? "LOPENS" : "GOPENS"
+
+    // Filter Open rows for ranking (non-PwD Open statewide/regional seats)
+    const openRecords = res.records.filter((r) => {
       if (r.closingPercentile < 0 || r.closingPercentile > 100) return false
 
-      // City Filter (WHERE city IN selectedCities)
+      // City filter
       if (!isAnyCity && !selectedCitiesSet.has(r.city.trim().toLowerCase())) {
         return false
       }
 
-      // PwD Filter
-      const rDis = r.disability.trim().toLowerCase()
-      const rawCode = r.categoryCodeRaw.toUpperCase()
-      if (reqPwd === "yes") {
-        if (rDis !== "yes" && !rawCode.startsWith("PWD")) return false
+      // Ignore PwD seats for Open ranking
+      if (r.disability.trim().toLowerCase() === "yes" || r.categoryCodeRaw.toUpperCase().startsWith("PWD")) {
+        return false
+      }
+
+      const rawCode = r.categoryCodeRaw.trim().toUpperCase()
+
+      // Match Open seats: GOPENS/LOPENS or regional GOPENH/GOPENO/LOPENH/LOPENO
+      if (isFemale) {
+        return (
+          rawCode === "LOPENS" ||
+          rawCode === "GOPENS" ||
+          rawCode === "LOPENH" ||
+          rawCode === "LOPENO" ||
+          rawCode === "GOPENH" ||
+          rawCode === "GOPENO" ||
+          r.category.trim().toUpperCase() === "OPEN"
+        )
       } else {
-        if (rDis === "yes" || rawCode.startsWith("PWD")) return false
+        // Male: exclude female-only L seats
+        return (
+          rawCode === "GOPENS" ||
+          rawCode === "GOPENH" ||
+          rawCode === "GOPENO" ||
+          (r.category.trim().toUpperCase() === "OPEN" && !rawCode.startsWith("L"))
+        )
       }
-
-      // Gender Filter for Male candidates
-      const rGen = r.gender.trim().toLowerCase()
-      if (reqGender === "male") {
-        if (rGen === "female" || (rawCode.startsWith("L") && !rawCode.startsWith("LOG"))) {
-          return false
-        }
-      }
-
-      // Category Filter (Candidate category OR OPEN fallback)
-      const rCat = r.category.trim().toUpperCase()
-      const isCandidateCat =
-        rCat === reqCategory ||
-        (reqCategory === "NT-A" && (rCat === "NT-A" || rawCode.includes("VJ") || rawCode.includes("NT1"))) ||
-        (reqCategory === "NT-B" && (rCat === "NT-B" || rawCode.includes("NT1") || rawCode.includes("NT2"))) ||
-        (reqCategory === "NT-C" && (rCat === "NT-C" || rawCode.includes("NT2") || rawCode.includes("NT3"))) ||
-        (reqCategory === "NT-D" && (rCat === "NT-D" || rawCode.includes("NT3") || rawCode.includes("VJ"))) ||
-        (reqCategory === "SBC" && (rCat === "SBC" || rCat === "OBC"))
-
-      const isOpen = rCat === "OPEN" || rawCode.startsWith("GOPEN") || rawCode.startsWith("LOPEN")
-
-      return isCandidateCat || isOpen
     })
 
-    if (!rawCutoffs || rawCutoffs.length === 0) {
+    if (!openRecords || openRecords.length === 0) {
       return { items: [] }
     }
 
-    // Deduplication per College Code + Branch Code:
-    // Prefer candidate's exact category row over OPEN fallback, and break ties by higher closingPercentile.
-    function getCategoryScore(item: typeof res.records[0]): number {
-      const cat = item.category.trim().toUpperCase()
-      const raw = item.categoryCodeRaw.trim().toUpperCase()
-      let score = 0
-      if (cat === reqCategory) score += 100
-      else if (reqCategory !== "OPEN" && cat === "OPEN") score += 50
+    // Deduplicate Open rows per College Code + Branch Code for Engine 1
+    // Prefer GOPENS/LOPENS over regional codes, break ties by higher closingPercentile
+    const openMap = new Map<string, typeof openRecords[0]>()
 
-      if (reqGender === "female" && (item.gender.trim().toLowerCase() === "female" || raw.startsWith("L"))) {
-        score += 10
-      }
-      return score
-    }
-
-    const collegeBranchMap = new Map<string, typeof rawCutoffs[0]>()
-
-    for (const item of rawCutoffs) {
+    for (const item of openRecords) {
       const key = `${item.collegeCode}_${item.branchCode}`
-      const existing = collegeBranchMap.get(key)
+      const existing = openMap.get(key)
       if (!existing) {
-        collegeBranchMap.set(key, item)
+        openMap.set(key, item)
       } else {
-        const itemScore = getCategoryScore(item)
-        const existingScore = getCategoryScore(existing)
-        if (itemScore > existingScore) {
-          collegeBranchMap.set(key, item)
-        } else if (itemScore === existingScore && item.closingPercentile > existing.closingPercentile) {
-          collegeBranchMap.set(key, item)
+        const itemRaw = item.categoryCodeRaw.toUpperCase()
+        const exRaw = existing.categoryCodeRaw.toUpperCase()
+        const itemIsTarget = itemRaw === openTargetCode
+        const exIsTarget = exRaw === openTargetCode
+        if (itemIsTarget && !exIsTarget) {
+          openMap.set(key, item)
+        } else if (itemIsTarget === exIsTarget && item.closingPercentile > existing.closingPercentile) {
+          openMap.set(key, item)
         }
       }
     }
 
-    const filteredRecords = Array.from(collegeBranchMap.values())
+    const deduplicatedOpen = Array.from(openMap.values())
 
-    // 4. Stage Ranges (Dream, Target, Safe)
+    // Engine 1 Stage Ranges (Dream, Target, Safe calculated against Open Cutoffs!)
     const targetMin = Math.max(0, percentile - 5)
     const safeMin = Math.max(0, percentile - 15)
 
@@ -334,7 +326,7 @@ export class PreferenceGeneratorService {
       return null
     }
 
-    // 5. Normalize & Deduplicate Student Branch Priorities into Branch Groups
+    // Normalize & Deduplicate Student Branch Priorities into Branch Groups
     const selectedGroupMap = new Map<string, { groupId: string; displayName: string; matchedAliases: string[] }>()
     const orderedBranchGroups: { groupId: string; displayName: string; matchedAliases: string[] }[] = []
 
@@ -347,15 +339,15 @@ export class PreferenceGeneratorService {
     }
 
     const stages: ("Dream" | "Target" | "Safe")[] = ["Dream", "Target", "Safe"]
-    const resultList: PreferenceResultItem[] = []
+    const engine1Ranked: { stage: "Dream" | "Target" | "Safe"; openItem: typeof deduplicatedOpen[0] }[] = []
     const addedKeys = new Set<string>()
 
-    // 6. Ordering Hierarchy: Stage -> Branch Group Priority -> Closing Percentile DESC
+    // Engine 1 Hierarchy: Stage -> Branch Group Priority -> Closing Percentile DESC
     for (const stage of stages) {
       for (const group of orderedBranchGroups) {
         const aliasNormSet = new Set(group.matchedAliases.map((a) => a.trim().toLowerCase()))
 
-        const bucket = filteredRecords.filter((rec) => {
+        const bucket = deduplicatedOpen.filter((rec) => {
           const stageTag = getStageTag(rec.closingPercentile)
           if (stageTag !== stage) return false
           if (!aliasNormSet.has(rec.branchName.trim().toLowerCase())) return false
@@ -364,32 +356,138 @@ export class PreferenceGeneratorService {
           return !addedKeys.has(dedupeKey)
         })
 
-        // Sort bucket by closingPercentile DESCENDING
+        // Sort bucket by Open closingPercentile DESCENDING
         bucket.sort((a, b) => b.closingPercentile - a.closingPercentile)
 
         for (const item of bucket) {
           const dedupeKey = `${stage}_${item.collegeCode}_${group.groupId}`
           addedKeys.add(dedupeKey)
-
-          resultList.push({
-            id: item.id,
-            collegeCode: item.collegeCode,
-            collegeName: item.collegeName,
-            branchCode: item.branchCode,
-            branchName: item.branchName,
-            city: item.city,
-            status: item.status,
-            homeUniversity: item.homeUniversity,
-            closingPercentile: item.closingPercentile,
-            closingRank: item.closingRank,
-            categoryUsed: item.categoryCodeRaw,
-            stageTag: stage,
-            priorityIndex: resultList.length + 1,
-          })
+          engine1Ranked.push({ stage, openItem: item })
         }
       }
     }
 
-    return { items: resultList }
+    // ========================================================
+    // ENGINE 2: Eligibility Engine
+    // Purpose: Calculate student's REAL admission chance using their Category, Gender, PwD.
+    // ========================================================
+    const isPwd = reqPwd === "yes"
+
+    const finalResultList: PreferenceResultItem[] = engine1Ranked.map(({ stage, openItem }, idx) => {
+      const colCode = openItem.collegeCode
+      const brCode = openItem.branchCode
+
+      // Find all rows for this specific college & branch in the dataset
+      const collegeBranchRows = res.records.filter(
+        (r) => r.collegeCode === colCode && r.branchCode === brCode && r.closingPercentile >= 0
+      )
+
+      // Search for candidate's category/gender/pwd matching row
+      let catRow: typeof res.records[0] | undefined = undefined
+
+      if (isPwd) {
+        catRow = collegeBranchRows.find((r) => {
+          const dis = r.disability.trim().toLowerCase()
+          const raw = r.categoryCodeRaw.trim().toUpperCase()
+          const cat = r.category.trim().toUpperCase()
+          if (dis !== "yes" && !raw.startsWith("PWD")) return false
+          return cat === reqCategory || raw.includes(reqCategory)
+        })
+        if (!catRow) {
+          catRow = collegeBranchRows.find((r) => {
+            const dis = r.disability.trim().toLowerCase()
+            const raw = r.categoryCodeRaw.trim().toUpperCase()
+            return dis === "yes" || raw.startsWith("PWD")
+          })
+        }
+      } else {
+        if (isFemale) {
+          catRow = collegeBranchRows.find((r) => {
+            const cat = r.category.trim().toUpperCase()
+            const gen = r.gender.trim().toLowerCase()
+            const raw = r.categoryCodeRaw.trim().toUpperCase()
+            if (r.disability.trim().toLowerCase() === "yes" || raw.startsWith("PWD")) return false
+            return (cat === reqCategory || raw.includes(reqCategory)) && (gen === "female" || raw.startsWith("L"))
+          })
+        }
+        if (!catRow) {
+          catRow = collegeBranchRows.find((r) => {
+            const cat = r.category.trim().toUpperCase()
+            const raw = r.categoryCodeRaw.trim().toUpperCase()
+            if (r.disability.trim().toLowerCase() === "yes" || raw.startsWith("PWD")) return false
+            return cat === reqCategory || raw.includes(reqCategory)
+          })
+        }
+      }
+
+      // Fallback to Open row if no category row exists
+      const effectiveCategoryRow = catRow || openItem
+
+      const openClosingPercentile = openItem.closingPercentile
+      const openClosingRank = openItem.closingRank
+      const openCategoryCode = openItem.categoryCodeRaw || (isFemale ? "LOPENS" : "GOPENS")
+
+      const categoryClosingPercentile = effectiveCategoryRow.closingPercentile
+      const categoryClosingRank = effectiveCategoryRow.closingRank
+      const categoryUsed = effectiveCategoryRow.categoryCodeRaw || openCategoryCode
+
+      // Compute Chance
+      const diff = percentile - categoryClosingPercentile
+      let chance: "Very Safe" | "Safe" | "Good Match" | "Borderline" | "Difficult" | "Very Difficult" = "Borderline"
+      let chanceLabel = "BORDERLINE"
+      let chanceColor = "bg-amber-50 text-amber-700 border-amber-200"
+
+      if (diff >= 10) {
+        chance = "Very Safe"
+        chanceLabel = "VERY SAFE"
+        chanceColor = "bg-emerald-50 text-emerald-700 border-emerald-200"
+      } else if (diff >= 5) {
+        chance = "Safe"
+        chanceLabel = "SAFE"
+        chanceColor = "bg-emerald-50 text-emerald-700 border-emerald-200"
+      } else if (diff >= 2) {
+        chance = "Good Match"
+        chanceLabel = "GOOD MATCH"
+        chanceColor = "bg-blue-50 text-blue-700 border-blue-200"
+      } else if (diff >= 0) {
+        chance = "Borderline"
+        chanceLabel = "BORDERLINE"
+        chanceColor = "bg-amber-50 text-amber-700 border-amber-200"
+      } else if (diff >= -5) {
+        chance = "Difficult"
+        chanceLabel = "DIFFICULT"
+        chanceColor = "bg-orange-50 text-orange-700 border-orange-200"
+      } else {
+        chance = "Very Difficult"
+        chanceLabel = "VERY DIFFICULT"
+        chanceColor = "bg-rose-50 text-rose-700 border-rose-200"
+      }
+
+      return {
+        id: openItem.id,
+        collegeCode: openItem.collegeCode,
+        collegeName: openItem.collegeName,
+        branchCode: openItem.branchCode,
+        branchName: openItem.branchName,
+        city: openItem.city,
+        status: openItem.status,
+        homeUniversity: openItem.homeUniversity,
+        openClosingPercentile,
+        openClosingRank,
+        openCategoryCode,
+        categoryClosingPercentile,
+        categoryClosingRank,
+        categoryUsed,
+        chance,
+        chanceLabel,
+        chanceColor,
+        closingPercentile: openClosingPercentile,
+        closingRank: openClosingRank,
+        stageTag: stage,
+        priorityIndex: idx + 1,
+      }
+    })
+
+    return { items: finalResultList }
   }
 }

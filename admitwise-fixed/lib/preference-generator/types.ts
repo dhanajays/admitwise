@@ -17,9 +17,20 @@ export interface PreferenceResultItem {
   city: string
   status: string
   homeUniversity: string
+  // Engine 1: Ranking Cutoff (Open Cutoff)
+  openClosingPercentile: number
+  openClosingRank: number
+  openCategoryCode: string // "GOPENS" | "LOPENS" | Open fallback
+  // Engine 2: Student Category Cutoff & Admission Chance
+  categoryClosingPercentile: number
+  categoryClosingRank: number
+  categoryUsed: string // e.g. "GOBCS", "PWDOBCS", "GSCS", etc.
+  chance: "Very Safe" | "Safe" | "Good Match" | "Borderline" | "Difficult" | "Very Difficult"
+  chanceLabel: string
+  chanceColor: string
+  // Aliases for backwards compatibility
   closingPercentile: number
   closingRank: number
-  categoryUsed: string // "GOPENS" | "LOPENS" | category code
   stageTag: "Dream" | "Target" | "Safe"
   priorityIndex: number
 }
