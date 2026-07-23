@@ -146,3 +146,333 @@ export async function fulfillSuccessfulPayment(orderId: string, paymentId: strin
     }
   }, { timeout: 25000 })
 }
+
+export interface AdminGrantParams {
+  userId: string
+  accessType: string
+  round?: string
+  accessStatus?: string
+  percentile?: number
+  planType?: string
+  adminUserId?: string
+}
+
+export async function fulfillAdminGrant(params: AdminGrantParams) {
+  const {
+    userId,
+    accessType = "Preference List Generator (₹599)",
+    round = "Round 1",
+    accessStatus = "Active",
+    percentile = 95,
+    planType,
+  } = params
+
+  return db.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+    })
+
+    if (!user) {
+      throw new Error(`User with ID ${userId} not found`)
+    }
+
+    const normType = (planType || accessType || "").toLowerCase()
+    const isRevoking = accessStatus === "No Access" || accessStatus === "Expired"
+    const timestamp = Date.now()
+    const orderId = `order_admin_${timestamp}`
+    const paymentId = `pay_admin_${timestamp}`
+
+    if (isRevoking) {
+      const purchaseModel = (tx as any)?.preferenceGeneratorPurchase || (db as any)?.preferenceGeneratorPurchase
+      if (purchaseModel && purchaseModel.updateMany) {
+        await purchaseModel.updateMany({
+          where: { userId, round },
+          data: { status: "Expired" },
+        })
+      }
+      return {
+        success: true,
+        message: `Preference list access revoked for ${round}`,
+        plan: user.currentPlan || "free",
+        allowedSavedPercentiles: 0,
+        allowedRounds: [],
+      }
+    }
+
+    // Case A: ₹5000 Premium Plan
+    if (normType.includes("5000") || normType.includes("premium")) {
+      const planId = "premium"
+      const planName = "Premium CAP Support (₹5000)"
+      const maxProfiles = 3
+      const amount = 5000
+
+      // 1. Update User Record
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          currentPlan: planId,
+          paymentStatus: "paid",
+          profileLimit: maxProfiles,
+          trackerProfileLimit: maxProfiles,
+        },
+      })
+
+      // 2. Expire old active subscriptions & create new Subscription
+      await tx.subscription.updateMany({
+        where: { userId, status: "active" },
+        data: { status: "expired", expiresAt: new Date() },
+      })
+
+      const planExists = await tx.plan.findUnique({ where: { id: planId } })
+      if (planExists) {
+        await tx.subscription.create({
+          data: {
+            userId,
+            planId,
+            maxProfiles,
+            trackerMaxProfiles: maxProfiles,
+            status: "active",
+            activatedAt: new Date(),
+          },
+        })
+      }
+
+      // 3. Create Payment record in Payment table (mirroring Razorpay)
+      if (db.payment) {
+        try {
+          await tx.payment.create({
+            data: {
+              orderId,
+              paymentId,
+              userId,
+              planId,
+              amount,
+              status: "Success",
+              purchaseType: "plan",
+            },
+          })
+        } catch (e) {
+          console.warn("Could not record Payment entry:", e)
+        }
+      }
+
+      // 4. Create/update PreferenceGeneratorPurchase
+      const purchaseModel = (tx as any)?.preferenceGeneratorPurchase || (db as any)?.preferenceGeneratorPurchase
+      if (purchaseModel) {
+        const existing = purchaseModel.findFirst
+          ? await purchaseModel.findFirst({ where: { userId, round: "ALL" } })
+          : null
+
+        if (existing && purchaseModel.update) {
+          await purchaseModel.update({
+            where: { id: existing.id },
+            data: { status: "Paid", savedPercentile: percentile, amount, paymentId },
+          })
+        } else if (purchaseModel.create) {
+          await purchaseModel.create({
+            data: { userId, round: "ALL", savedPercentile: percentile, status: "Paid", amount, paymentId },
+          })
+        }
+      }
+
+      // 5. Upsert PreferenceSavedPercentile
+      const savedModel = (tx as any)?.preferenceSavedPercentile || (db as any)?.preferenceSavedPercentile
+      if (savedModel && savedModel.upsert) {
+        await savedModel.upsert({
+          where: { userId_savedPercentile: { userId, savedPercentile: percentile } },
+          create: { userId, savedPercentile: percentile },
+          update: {},
+        })
+      }
+
+      // 6. Record ActivityLog
+      await tx.activityLog.create({
+        data: {
+          userId,
+          action: "ADMIN_GRANT_PREMIUM",
+          details: `Admin manually granted ${planName}. Amount: INR ${amount}`,
+        },
+      })
+
+      return {
+        success: true,
+        message: `Granted ${planName} successfully`,
+        plan: planId,
+        allowedSavedPercentiles: maxProfiles,
+        allowedRounds: ["Round 1", "Round 2", "Round 3", "Round 4"],
+      }
+    }
+
+    // Case B: ₹6000 Elite Plan
+    if (normType.includes("6000") || normType.includes("elite")) {
+      const planId = "elite"
+      const planName = "Elite Admission Support (₹6000)"
+      const maxProfiles = 4
+      const amount = 6000
+
+      // 1. Update User Record
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          currentPlan: planId,
+          paymentStatus: "paid",
+          profileLimit: maxProfiles,
+          trackerProfileLimit: maxProfiles,
+        },
+      })
+
+      // 2. Expire old active subscriptions & create new Subscription
+      await tx.subscription.updateMany({
+        where: { userId, status: "active" },
+        data: { status: "expired", expiresAt: new Date() },
+      })
+
+      const planExists = await tx.plan.findUnique({ where: { id: planId } })
+      if (planExists) {
+        await tx.subscription.create({
+          data: {
+            userId,
+            planId,
+            maxProfiles,
+            trackerMaxProfiles: maxProfiles,
+            status: "active",
+            activatedAt: new Date(),
+          },
+        })
+      }
+
+      // 3. Create Payment record in Payment table (mirroring Razorpay)
+      if (db.payment) {
+        try {
+          await tx.payment.create({
+            data: {
+              orderId,
+              paymentId,
+              userId,
+              planId,
+              amount,
+              status: "Success",
+              purchaseType: "plan",
+            },
+          })
+        } catch (e) {
+          console.warn("Could not record Payment entry:", e)
+        }
+      }
+
+      // 4. Create/update PreferenceGeneratorPurchase
+      const purchaseModel = (tx as any)?.preferenceGeneratorPurchase || (db as any)?.preferenceGeneratorPurchase
+      if (purchaseModel) {
+        const existing = purchaseModel.findFirst
+          ? await purchaseModel.findFirst({ where: { userId, round: "ALL" } })
+          : null
+
+        if (existing && purchaseModel.update) {
+          await purchaseModel.update({
+            where: { id: existing.id },
+            data: { status: "Paid", savedPercentile: percentile, amount, paymentId },
+          })
+        } else if (purchaseModel.create) {
+          await purchaseModel.create({
+            data: { userId, round: "ALL", savedPercentile: percentile, status: "Paid", amount, paymentId },
+          })
+        }
+      }
+
+      // 5. Upsert PreferenceSavedPercentile
+      const savedModel = (tx as any)?.preferenceSavedPercentile || (db as any)?.preferenceSavedPercentile
+      if (savedModel && savedModel.upsert) {
+        await savedModel.upsert({
+          where: { userId_savedPercentile: { userId, savedPercentile: percentile } },
+          create: { userId, savedPercentile: percentile },
+          update: {},
+        })
+      }
+
+      // 6. Record ActivityLog
+      await tx.activityLog.create({
+        data: {
+          userId,
+          action: "ADMIN_GRANT_ELITE",
+          details: `Admin manually granted ${planName}. Amount: INR ${amount}`,
+        },
+      })
+
+      return {
+        success: true,
+        message: `Granted ${planName} successfully`,
+        plan: planId,
+        allowedSavedPercentiles: maxProfiles,
+        allowedRounds: ["Round 1", "Round 2", "Round 3", "Round 4"],
+      }
+    }
+
+    // Case C: ₹599 Preference List Access for a specific round
+    const amount = 599
+    const planName = `Preference List Generator (₹599) - ${round}`
+
+    // 1. Create Payment record in Payment table (mirroring Razorpay)
+    if (db.payment) {
+      try {
+        await tx.payment.create({
+          data: {
+            orderId,
+            paymentId,
+            userId,
+            amount,
+            status: "Success",
+            purchaseType: "preference_generator",
+          },
+        })
+      } catch (e) {
+        console.warn("Could not record Payment entry:", e)
+      }
+    }
+
+    // 2. Create/update PreferenceGeneratorPurchase
+    const purchaseModel = (tx as any)?.preferenceGeneratorPurchase || (db as any)?.preferenceGeneratorPurchase
+    if (purchaseModel) {
+      const existing = purchaseModel.findFirst
+        ? await purchaseModel.findFirst({ where: { userId, round } })
+        : null
+
+      if (existing && purchaseModel.update) {
+        await purchaseModel.update({
+          where: { id: existing.id },
+          data: { status: "Paid", savedPercentile: percentile, amount, paymentId },
+        })
+      } else if (purchaseModel.create) {
+        await purchaseModel.create({
+          data: { userId, round, savedPercentile: percentile, status: "Paid", amount, paymentId },
+        })
+      }
+    }
+
+    // 3. Upsert PreferenceSavedPercentile
+    const savedModel = (tx as any)?.preferenceSavedPercentile || (db as any)?.preferenceSavedPercentile
+    if (savedModel && savedModel.upsert) {
+      await savedModel.upsert({
+        where: { userId_savedPercentile: { userId, savedPercentile: percentile } },
+        create: { userId, savedPercentile: percentile },
+        update: {},
+      })
+    }
+
+    // 4. Record ActivityLog
+    await tx.activityLog.create({
+      data: {
+        userId,
+        action: "ADMIN_GRANT_PREFERENCE",
+        details: `Admin manually granted ${planName}. Amount: INR ${amount}`,
+      },
+    })
+
+    return {
+      success: true,
+      message: `Granted Preference List access for ${round}`,
+      plan: user.currentPlan || "free",
+      allowedSavedPercentiles: 1,
+      allowedRounds: [round],
+    }
+  })
+}

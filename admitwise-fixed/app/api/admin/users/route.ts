@@ -1,6 +1,7 @@
 import { getAdminSession } from "@/lib/admin-auth"
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { fulfillAdminGrant } from "@/lib/payments"
 import * as bcrypt from "bcryptjs"
 
 async function checkAdminRole() {
@@ -276,16 +277,8 @@ export async function POST(req: Request) {
         planType,
       } = body
 
-      console.log("Prisma Models Top Level:", {
-        User: !!(db as any)?.user,
-        Subscription: !!(db as any)?.subscription,
-        PreferenceGeneratorPurchase: !!(db as any)?.preferenceGeneratorPurchase,
-        PreferenceSavedPercentile: !!(db as any)?.preferenceSavedPercentile,
-        PredictorProfile: !!(db as any)?.predictionProfile,
-      })
-
       console.log("========================================")
-      console.log("Preference Access Update Started")
+      console.log("Admin Grant Preference Access Request")
       console.log("========================================")
       console.log("Student ID:", userId)
       console.log("Target Round:", round)
@@ -296,290 +289,17 @@ export async function POST(req: Request) {
       console.log("Admin ID:", session.userId)
 
       try {
-        const result = await db.$transaction(async (tx) => {
-          console.log("Transaction Keys:", Object.keys(tx))
-          console.log("Model Exists on tx:", {
-            user: !!(tx as any)?.user,
-            subscription: !!(tx as any)?.subscription,
-            preferenceGeneratorPurchase: !!(tx as any)?.preferenceGeneratorPurchase,
-            preferenceSavedPercentile: !!(tx as any)?.preferenceSavedPercentile,
-          })
-
-          console.log("Loading student...")
-          const student = await tx.user.findUnique({
-            where: { id: userId },
-            select: { id: true, email: true, name: true, currentPlan: true },
-          })
-
-          if (!student) {
-            console.error("❌ Student not found with ID:", userId)
-            throw new Error(`Student with ID ${userId} not found.`)
-          }
-          console.log("✓ Student Found:", student.email)
-
-          const normType = (planType || accessType || "").toLowerCase()
-          const isRevoking = accessStatus === "No Access" || accessStatus === "Expired"
-
-          if (isRevoking) {
-            console.log("Revoking preference access for student...")
-            await tx.preferenceGeneratorPurchase.updateMany({
-              where: { userId, round },
-              data: { status: "Expired" },
-            })
-
-            console.log("✓ Preference access revoked.")
-            return {
-              message: `Preference list access revoked for ${round}`,
-              plan: student.currentPlan || "free",
-              allowedSavedPercentiles: 0,
-              allowedRounds: [],
-            }
-          }
-
-          // Model resolution with fallback to prevent undefined delegate crashes
-          const purchaseModel = (tx as any)?.preferenceGeneratorPurchase || (db as any)?.preferenceGeneratorPurchase
-          const savedPercentileModel = (tx as any)?.preferenceSavedPercentile || (db as any)?.preferenceSavedPercentile
-
-          // Case A: Grant ₹5000 Premium Plan
-          if (normType.includes("5000") || normType.includes("premium")) {
-            console.log("Granting ₹5000 Premium Plan (3 slots, All Rounds)...")
-
-            await tx.user.update({
-              where: { id: userId },
-              data: {
-                currentPlan: "premium",
-                profileLimit: 3,
-                paymentStatus: "paid",
-              },
-            })
-
-            await tx.subscription.updateMany({
-              where: { userId, status: "active" },
-              data: { status: "expired", expiresAt: new Date() },
-            })
-
-            const planExists = await tx.plan.findUnique({ where: { id: "premium" } })
-            if (planExists) {
-              await tx.subscription.create({
-                data: {
-                  userId,
-                  planId: "premium",
-                  maxProfiles: 3,
-                  trackerMaxProfiles: 3,
-                  status: "active",
-                },
-              })
-            }
-
-            console.log("------------------------------------------------");
-            console.log("FILE: app/api/admin/users/route.ts");
-            console.log("LINE: 375 (Case A)");
-            console.log("OBJECT purchaseModel =", purchaseModel);
-            console.log("TYPE =", typeof purchaseModel);
-            console.log("------------------------------------------------");
-
-            const existingPurchase = purchaseModel?.findFirst
-              ? await purchaseModel.findFirst({ where: { userId, round: "ALL" } })
-              : null
-
-            if (existingPurchase && purchaseModel?.update) {
-              await purchaseModel.update({
-                where: { id: existingPurchase.id },
-                data: {
-                  status: "Paid",
-                  savedPercentile: percentile,
-                  amount: 5000,
-                  paymentId: "admin_manual_premium",
-                },
-              })
-            } else if (purchaseModel?.create) {
-              await purchaseModel.create({
-                data: {
-                  userId,
-                  round: "ALL",
-                  savedPercentile: percentile,
-                  status: "Paid",
-                  amount: 5000,
-                  paymentId: "admin_manual_premium",
-                },
-              })
-            }
-
-            if (savedPercentileModel?.upsert) {
-              await savedPercentileModel.upsert({
-                where: {
-                  userId_savedPercentile: { userId, savedPercentile: percentile },
-                },
-                create: { userId, savedPercentile: percentile },
-                update: {},
-              })
-            }
-
-            console.log("✓ Granted ₹5000 Premium Plan successfully.")
-            return {
-              message: "Granted ₹5000 Premium Plan (3 slots, All Rounds)",
-              plan: "premium",
-              allowedSavedPercentiles: 3,
-              allowedRounds: ["Round 1", "Round 2", "Round 3", "Round 4"],
-            }
-          }
-
-          // Case B: Grant ₹6000 Elite Plan
-          if (normType.includes("6000") || normType.includes("elite")) {
-            console.log("Granting ₹6000 Elite Plan (4 slots, All Rounds)...")
-
-            await tx.user.update({
-              where: { id: userId },
-              data: {
-                currentPlan: "elite",
-                profileLimit: 4,
-                paymentStatus: "paid",
-              },
-            })
-
-            await tx.subscription.updateMany({
-              where: { userId, status: "active" },
-              data: { status: "expired", expiresAt: new Date() },
-            })
-
-            const planExists = await tx.plan.findUnique({ where: { id: "elite" } })
-            if (planExists) {
-              await tx.subscription.create({
-                data: {
-                  userId,
-                  planId: "elite",
-                  maxProfiles: 4,
-                  trackerMaxProfiles: 4,
-                  status: "active",
-                },
-              })
-            }
-
-            console.log("------------------------------------------------");
-            console.log("FILE: app/api/admin/users/route.ts");
-            console.log("LINE: 450 (Case B)");
-            console.log("OBJECT purchaseModel =", purchaseModel);
-            console.log("TYPE =", typeof purchaseModel);
-            console.log("------------------------------------------------");
-
-            const existingPurchase = purchaseModel?.findFirst
-              ? await purchaseModel.findFirst({ where: { userId, round: "ALL" } })
-              : null
-
-            if (existingPurchase && purchaseModel?.update) {
-              await purchaseModel.update({
-                where: { id: existingPurchase.id },
-                data: {
-                  status: "Paid",
-                  savedPercentile: percentile,
-                  amount: 6000,
-                  paymentId: "admin_manual_elite",
-                },
-              })
-            } else if (purchaseModel?.create) {
-              await purchaseModel.create({
-                data: {
-                  userId,
-                  round: "ALL",
-                  savedPercentile: percentile,
-                  status: "Paid",
-                  amount: 6000,
-                  paymentId: "admin_manual_elite",
-                },
-              })
-            }
-
-            if (savedPercentileModel?.upsert) {
-              await savedPercentileModel.upsert({
-                where: {
-                  userId_savedPercentile: { userId, savedPercentile: percentile },
-                },
-                create: { userId, savedPercentile: percentile },
-                update: {},
-              })
-            }
-
-            console.log("✓ Granted ₹6000 Elite Plan successfully.")
-            return {
-              message: "Granted ₹6000 Elite Plan (4 slots, All Rounds)",
-              plan: "elite",
-              allowedSavedPercentiles: 4,
-              allowedRounds: ["Round 1", "Round 2", "Round 3", "Round 4"],
-            }
-          }
-
-          // Case C: Grant ₹599 Preference List Access for a specific round
-          console.log("------------------------------------------------");
-          console.log("FILE: app/api/admin/users/route.ts");
-          console.log("LINE: 500 (Case C)");
-          console.log("OBJECT purchaseModel =", purchaseModel);
-          console.log("TYPE =", typeof purchaseModel);
-          console.log("------------------------------------------------");
-
-          const existingPurchase = purchaseModel?.findFirst
-            ? await purchaseModel.findFirst({ where: { userId, round } })
-            : null
-
-          if (existingPurchase && purchaseModel?.update) {
-            console.log("Updating existing purchase record ID:", existingPurchase.id)
-            await purchaseModel.update({
-              where: { id: existingPurchase.id },
-              data: {
-                status: "Paid",
-                savedPercentile: percentile,
-                amount: 599,
-                paymentId: "admin_manual",
-              },
-            })
-          } else if (purchaseModel?.create) {
-            console.log("Creating new purchase record...")
-            await purchaseModel.create({
-              data: {
-                userId,
-                round,
-                savedPercentile: percentile,
-                status: "Paid",
-                amount: 599,
-                paymentId: "admin_manual",
-              },
-            })
-          }
-
-          if (savedPercentileModel?.upsert) {
-            console.log("Updating saved percentile profile...")
-            await savedPercentileModel.upsert({
-              where: {
-                userId_savedPercentile: { userId, savedPercentile: percentile },
-              },
-              create: { userId, savedPercentile: percentile },
-              update: {},
-            })
-          }
-
-          console.log("✓ Granted Preference List access for", round)
-          return {
-            message: `Granted Preference List access for ${round}`,
-            plan: student.currentPlan || "free",
-            allowedSavedPercentiles: 1,
-            allowedRounds: [round],
-          }
+        const result = await fulfillAdminGrant({
+          userId,
+          accessType,
+          round,
+          accessStatus,
+          percentile,
+          planType,
+          adminUserId: session.userId,
         })
 
-        try {
-          await db.activityLog.create({
-            data: {
-              userId: session.userId,
-              action: "ADMIN_PREFERENCE_GRANT",
-              details: `Granted Preference List access to user ID ${userId} (${result.plan})`,
-            },
-          })
-        } catch (e) {
-          console.warn("Could not record activity log:", e)
-        }
-
-        console.log("========================================")
-        console.log("Preference Access Update Completed Successfully")
-        console.log("========================================")
+        console.log("✓ Admin Grant Fulfilled Successfully:", result)
 
         return NextResponse.json({
           success: true,
@@ -591,7 +311,7 @@ export async function POST(req: Request) {
         })
       } catch (err: any) {
         console.error("========================================")
-        console.error("❌ FULL ERROR:", err)
+        console.error("❌ Admin Grant Failed:", err)
         console.error("FULL STACK:", err?.stack)
         console.error("========================================")
 
