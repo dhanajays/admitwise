@@ -1,8 +1,30 @@
 import Razorpay from "razorpay"
 import crypto from "crypto"
 
-const keyId = process.env.RAZORPAY_KEY_ID
-const keySecret = process.env.RAZORPAY_KEY_SECRET
+export function getRazorpayCredentials() {
+  const mode = (process.env.PAYMENT_MODE || "").toLowerCase()
+  const isTest = mode === "test"
+
+  let keyId = isTest
+    ? process.env.RAZORPAY_TEST_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_TEST_KEY_ID
+    : process.env.RAZORPAY_LIVE_KEY_ID || process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+
+  let keySecret = isTest
+    ? process.env.RAZORPAY_TEST_KEY_SECRET
+    : process.env.RAZORPAY_LIVE_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET
+
+  // Fallbacks if mode-specific variables are not provided
+  if (!keyId) {
+    keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+  }
+  if (!keySecret) {
+    keySecret = process.env.RAZORPAY_KEY_SECRET
+  }
+
+  return { keyId, keySecret, isTest, mode }
+}
+
+const { keyId, keySecret, isTest } = getRazorpayCredentials()
 
 // Only allow mock mode in non-production environments if credentials are missing
 const isMocked = process.env.NODE_ENV !== "production" && (!keyId || !keySecret || keyId.includes("mock"))
@@ -14,8 +36,7 @@ export function getRazorpay() {
     return null
   }
 
-  const currentKeyId = process.env.RAZORPAY_KEY_ID
-  const currentKeySecret = process.env.RAZORPAY_KEY_SECRET
+  const { keyId: currentKeyId, keySecret: currentKeySecret, isTest: currentIsTest } = getRazorpayCredentials()
 
   if (!currentKeyId || !currentKeySecret) {
     throw new Error("Missing Razorpay environment variables")
@@ -26,13 +47,21 @@ export function getRazorpay() {
       key_id: currentKeyId,
       key_secret: currentKeySecret,
     })
+    console.log(`✓ Razorpay initialized in ${currentIsTest ? "TEST" : "LIVE"} mode`)
   }
 
   return razorpayInstance
 }
 
+export function getRazorpayKeyId(): string {
+  const { keyId: currentKeyId } = getRazorpayCredentials()
+  return currentKeyId || ""
+}
+
 if (isMocked) {
   console.log("⚠️ Razorpay credentials are missing or mocked. Payments will run in mock mode.")
+} else {
+  console.log(`✓ Razorpay initialized in ${isTest ? "TEST" : "LIVE"} mode`)
 }
 
 /** Create a Razorpay Order */
@@ -77,7 +106,8 @@ export function verifyRazorpaySignature(
   }
 
   try {
-    const hmac = crypto.createHmac("sha256", keySecret || "")
+    const { keySecret: activeSecret } = getRazorpayCredentials()
+    const hmac = crypto.createHmac("sha256", activeSecret || "")
     hmac.update(`${orderId}|${paymentId}`)
     const generatedSignature = hmac.digest("hex")
     return generatedSignature === signature

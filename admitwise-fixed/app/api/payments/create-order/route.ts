@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions, CustomSession } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { createRazorpayOrder } from "@/lib/razorpay"
+import { createRazorpayOrder, getRazorpayKeyId } from "@/lib/razorpay"
 import { z } from "zod"
 
 const createOrderSchema = z.object({
@@ -151,7 +151,7 @@ export async function POST(req: Request) {
       currency: order.currency,
       receipt: order.receipt,
       status: order.status,
-      key: process.env.RAZORPAY_KEY_ID || "",
+      key: getRazorpayKeyId(),
       user: {
         name: session.user.name,
         email: session.user.email,
