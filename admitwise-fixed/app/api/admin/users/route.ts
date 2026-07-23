@@ -276,6 +276,14 @@ export async function POST(req: Request) {
         planType,
       } = body
 
+      console.log("Prisma Models Top Level:", {
+        User: !!(db as any)?.user,
+        Subscription: !!(db as any)?.subscription,
+        PreferenceGeneratorPurchase: !!(db as any)?.preferenceGeneratorPurchase,
+        PreferenceSavedPercentile: !!(db as any)?.preferenceSavedPercentile,
+        PredictorProfile: !!(db as any)?.predictionProfile,
+      })
+
       console.log("========================================")
       console.log("Preference Access Update Started")
       console.log("========================================")
@@ -289,11 +297,12 @@ export async function POST(req: Request) {
 
       try {
         const result = await db.$transaction(async (tx) => {
-          console.log("Model Exists:", {
-            user: !!tx.user,
-            subscription: !!tx.subscription,
-            preferenceGeneratorPurchase: !!tx.preferenceGeneratorPurchase,
-            preferenceSavedPercentile: !!tx.preferenceSavedPercentile,
+          console.log("Transaction Keys:", Object.keys(tx))
+          console.log("Model Exists on tx:", {
+            user: !!(tx as any)?.user,
+            subscription: !!(tx as any)?.subscription,
+            preferenceGeneratorPurchase: !!(tx as any)?.preferenceGeneratorPurchase,
+            preferenceSavedPercentile: !!(tx as any)?.preferenceSavedPercentile,
           })
 
           console.log("Loading student...")
@@ -358,6 +367,11 @@ export async function POST(req: Request) {
               })
             }
 
+            console.log("Before findFirst Case A", {
+              tx: !!tx,
+              tx_preferenceGeneratorPurchase: !!(tx as any)?.preferenceGeneratorPurchase,
+              db_preferenceGeneratorPurchase: !!(db as any)?.preferenceGeneratorPurchase,
+            })
             const existingPurchase = await tx.preferenceGeneratorPurchase.findFirst({
               where: { userId, round: "ALL" },
             })
@@ -433,6 +447,11 @@ export async function POST(req: Request) {
               })
             }
 
+            console.log("Before findFirst Case B", {
+              tx: !!tx,
+              tx_preferenceGeneratorPurchase: !!(tx as any)?.preferenceGeneratorPurchase,
+              db_preferenceGeneratorPurchase: !!(db as any)?.preferenceGeneratorPurchase,
+            })
             const existingPurchase = await tx.preferenceGeneratorPurchase.findFirst({
               where: { userId, round: "ALL" },
             })
@@ -478,7 +497,11 @@ export async function POST(req: Request) {
           }
 
           // Case C: Grant ₹599 Preference List Access for a specific round
-          console.log(`Checking existing purchase for user ${userId} and round ${round}...`)
+          console.log("Before findFirst Case C", {
+            tx: !!tx,
+            tx_preferenceGeneratorPurchase: !!(tx as any)?.preferenceGeneratorPurchase,
+            db_preferenceGeneratorPurchase: !!(db as any)?.preferenceGeneratorPurchase,
+          })
           const existingPurchase = await tx.preferenceGeneratorPurchase.findFirst({
             where: { userId, round },
           })
@@ -552,20 +575,17 @@ export async function POST(req: Request) {
         })
       } catch (err: any) {
         console.error("========================================")
-        console.error("❌ Preference Access Update Failed")
-        console.error("Error Name:", err?.name)
-        console.error("Error Message:", err?.message)
-        console.error("Prisma Code:", err?.code)
-        console.error("Stack Trace:", err?.stack)
+        console.error("❌ FULL ERROR:", err)
+        console.error("FULL STACK:", err?.stack)
         console.error("========================================")
 
         return NextResponse.json(
           {
             success: false,
-            error: err?.message || "Failed to update Preference Generator access.",
-            code: err?.code || "UNKNOWN_ERROR",
+            error: String(err?.message || err),
+            stack: err?.stack || String(err),
           },
-          { status: 400 }
+          { status: 500 }
         )
       }
     }
