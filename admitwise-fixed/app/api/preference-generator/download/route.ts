@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions, CustomSession } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { getPreferenceListAccess } from "@/lib/payments"
 import { PreferenceGeneratorService } from "@/lib/preference-generator/service"
 import { generatePreferencePDF } from "@/lib/preference-generator/pdf-generator"
 import { z } from "zod"
@@ -31,31 +32,9 @@ export async function POST(req: Request) {
 
     let { percentile, round, preferredBranches, preferredCities, category, gender, pwd } = parsed.data
 
-    // Check if user is subscriber or purchased round
-    let isPaid = false
-    const userRecord = await db.user.findUnique({
-      where: { id: session.user.id },
-      select: { currentPlan: true },
-    })
-
-    if (userRecord && (userRecord.currentPlan === "premium" || userRecord.currentPlan === "elite")) {
-      isPaid = true
-    } else if (db && (db as any).preferenceGeneratorPurchase) {
-      const purchase = await db.preferenceGeneratorPurchase.findUnique({
-        where: {
-          userId_round: {
-            userId: session.user.id,
-            round,
-          },
-        },
-      })
-      if (purchase && purchase.status === "Paid") {
-        if (Math.abs(purchase.savedPercentile - percentile) < 0.05) {
-          isPaid = true
-          percentile = purchase.savedPercentile
-        }
-      }
-    }
+    // Check Preference List access via centralized single source of truth
+    const access = await getPreferenceListAccess(session.user.id)
+    const isPaid = access.hasAccess && (access.isFullPlan || access.allowedRounds.includes(round) || access.purchases.length > 0)
 
     if (!isPaid) {
       return NextResponse.json(

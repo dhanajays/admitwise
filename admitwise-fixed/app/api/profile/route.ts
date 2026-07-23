@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { getPreferenceListAccess } from "@/lib/payments"
 import { z } from "zod"
 
 const profileUpdateSchema = z.object({
@@ -49,7 +50,12 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  return NextResponse.json(user)
+  const access = await getPreferenceListAccess(user.id)
+
+  return NextResponse.json({
+    ...user,
+    preferenceAccess: access,
+  })
 }
 
 export async function PUT(req: Request) {

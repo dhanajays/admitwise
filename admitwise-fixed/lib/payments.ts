@@ -476,3 +476,130 @@ export async function fulfillAdminGrant(params: AdminGrantParams) {
     }
   })
 }
+
+export interface PreferenceAccessResult {
+  userId: string
+  hasAccess: boolean
+  planName: string
+  currentPlan: string
+  isFullPlan: boolean
+  includedSlots: number
+  purchasedSlots: number
+  totalMaxSlots: number
+  usedSlots: number
+  remainingSlots: number
+  allowedRounds: string[]
+  savedPercentiles: number[]
+  purchases: {
+    id: string
+    round: string
+    savedPercentile: number | null
+    amount: number
+    status: string
+  }[]
+}
+
+export async function getPreferenceListAccess(userId: string): Promise<PreferenceAccessResult> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { currentPlan: true },
+  })
+
+  const currentPlan = (user?.currentPlan || "free").toLowerCase()
+  const isFullPlan = currentPlan === "premium" || currentPlan === "elite"
+  let includedSlots = 0
+  let planName = "Free Plan"
+
+  if (currentPlan === "premium") {
+    includedSlots = 3
+    planName = "Premium Plan (₹5000)"
+  } else if (currentPlan === "elite") {
+    includedSlots = 4
+    planName = "Elite Plan (₹6000)"
+  }
+
+  let purchasesList: { id: string; round: string; savedPercentile: number | null; amount: number; status: string }[] = []
+  const purchaseModel = (db as any)?.preferenceGeneratorPurchase
+
+  if (purchaseModel && purchaseModel.findMany) {
+    try {
+      const records = await purchaseModel.findMany({
+        where: { userId },
+      })
+      purchasesList = records.map((p: any) => ({
+        id: p.id,
+        round: p.round || "ALL",
+        savedPercentile: p.savedPercentile ?? null,
+        amount: p.amount ?? 599,
+        status: p.status || "Paid",
+      }))
+    } catch (e) {
+      console.error("Error loading preference generator purchases:", e)
+    }
+  }
+
+  const paidPurchases = purchasesList.filter((p) => (p.status || "").toLowerCase() === "paid")
+  const purchasedSlots = isFullPlan
+    ? paidPurchases.filter((p) => p.amount === 599).length
+    : paidPurchases.length
+
+  const totalMaxSlots = isFullPlan ? includedSlots + purchasedSlots : Math.max(purchasedSlots, 0)
+
+  let savedPercentiles: number[] = []
+  const savedModel = (db as any)?.preferenceSavedPercentile
+
+  if (savedModel && savedModel.findMany) {
+    try {
+      const records = await savedModel.findMany({
+        where: { userId },
+        orderBy: { createdAt: "asc" },
+      })
+      savedPercentiles = records.map((r: any) => r.savedPercentile)
+    } catch (e) {
+      console.error("Error loading preference saved percentiles:", e)
+    }
+  }
+
+  if (savedPercentiles.length === 0 && paidPurchases.length > 0) {
+    const pSet = new Set<number>()
+    for (const p of paidPurchases) {
+      if (p.savedPercentile !== null && p.savedPercentile !== undefined) {
+        pSet.add(p.savedPercentile)
+      }
+    }
+    savedPercentiles = Array.from(pSet)
+  }
+
+  const usedSlots = savedPercentiles.length
+  const remainingSlots = Math.max(0, totalMaxSlots - usedSlots)
+  const hasAccess = isFullPlan || paidPurchases.length > 0 || totalMaxSlots > 0
+
+  let allowedRounds = ["Round 1", "Round 2", "Round 3", "Round 4"]
+  if (!isFullPlan) {
+    const hasAll = paidPurchases.some((p) => p.round === "ALL")
+    if (!hasAll) {
+      const specificRounds = Array.from(new Set(paidPurchases.map((p) => p.round).filter(Boolean)))
+      allowedRounds = specificRounds.length > 0 ? (specificRounds as string[]) : ["Round 1"]
+    }
+  }
+
+  if (!isFullPlan && paidPurchases.length > 0 && planName === "Free Plan") {
+    planName = `Preference List (${paidPurchases[0]?.round || "Round 1"})`
+  }
+
+  return {
+    userId,
+    hasAccess,
+    planName,
+    currentPlan,
+    isFullPlan,
+    includedSlots,
+    purchasedSlots,
+    totalMaxSlots,
+    usedSlots,
+    remainingSlots,
+    allowedRounds,
+    savedPercentiles,
+    purchases: purchasesList,
+  }
+}
