@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -46,8 +46,31 @@ export default function PreferenceListGeneratorPage() {
   const [isIncludedInPlan, setIsIncludedInPlan] = useState(false)
   const [planName, setPlanName] = useState<string>("")
   const [savedPercentile, setSavedPercentile] = useState<number | null>(null)
-  const [allPurchases, setAllPurchases] = useState<any[]>([])
   const [predictorProfiles, setPredictorProfiles] = useState<number[]>([])
+
+  // Slot Engine State
+  const [slotStats, setSlotStats] = useState<{
+    hasAccess: boolean
+    isIncludedInPlan: boolean
+    planName: string
+    includedSlots: number
+    purchasedSlots: number
+    totalMaxSlots: number
+    usedSlots: number
+    remainingSlots: number
+    savedPercentiles: number[]
+  }>({
+    hasAccess: false,
+    isIncludedInPlan: false,
+    planName: "",
+    includedSlots: 0,
+    purchasedSlots: 0,
+    totalMaxSlots: 0,
+    usedSlots: 0,
+    remainingSlots: 0,
+    savedPercentiles: [],
+  })
+
   const [results, setResults] = useState<PreferenceResultItem[]>([])
   const [totalCount, setTotalCount] = useState<number>(0)
   const [hasGenerated, setHasGenerated] = useState(false)
@@ -105,7 +128,7 @@ export default function PreferenceListGeneratorPage() {
     fetchPredictorProfiles()
   }, [session])
 
-  // 3. Fetch Dynamic Branches & Cities for selected CAP Round
+  // 3. Dynamic dataset options fetching
   useEffect(() => {
     async function fetchOptions() {
       setLoadingOptions(true)
@@ -143,49 +166,54 @@ export default function PreferenceListGeneratorPage() {
     fetchOptions()
   }, [capRound])
 
-  // 4. Check Purchase status whenever session or capRound changes
-  useEffect(() => {
-    async function checkPurchase() {
-      if (!session || !session.user) {
-        setIsPaid(false)
-        setIsIncludedInPlan(false)
-        setPlanName("")
-        setSavedPercentile(null)
-        setAllPurchases([])
-        return
-      }
-
-      try {
-        const res = await fetch(`/api/preference-generator/purchase?round=${encodeURIComponent(capRound)}`)
-        if (res.ok) {
-          const data = await res.json()
-          setAllPurchases(data.allPurchases || [])
-          if (data.isPaid) {
-            setIsIncludedInPlan(!!data.isIncludedInPlan)
-            setPlanName(data.planName || "")
-            if (data.purchase?.savedPercentile) {
-              setSavedPercentile(data.purchase.savedPercentile)
-              // Set percentile input to locked percentile if none typed yet
-              if (!percentile) {
-                setPercentile(data.purchase.savedPercentile.toFixed(2))
-              }
-            } else {
-              setSavedPercentile(null)
-            }
-          } else {
-            setIsPaid(false)
-            setIsIncludedInPlan(false)
-            setPlanName("")
-            setSavedPercentile(null)
-          }
-        }
-      } catch (err) {
-        console.error("Error checking purchase status:", err)
-      }
+  // 4. Check Purchase & Slot status whenever session changes
+  const checkPurchase = useCallback(async () => {
+    if (!session || !session.user) {
+      setIsPaid(false)
+      setIsIncludedInPlan(false)
+      setPlanName("")
+      setSavedPercentile(null)
+      setSlotStats({
+        hasAccess: false,
+        isIncludedInPlan: false,
+        planName: "",
+        includedSlots: 0,
+        purchasedSlots: 0,
+        totalMaxSlots: 0,
+        usedSlots: 0,
+        remainingSlots: 0,
+        savedPercentiles: [],
+      })
+      return
     }
 
+    try {
+      const res = await fetch("/api/preference-generator/purchase")
+      if (res.ok) {
+        const data = await res.json()
+        setSlotStats({
+          hasAccess: !!data.hasAccess,
+          isIncludedInPlan: !!data.isIncludedInPlan,
+          planName: data.planName || "",
+          includedSlots: data.includedSlots || 0,
+          purchasedSlots: data.purchasedSlots || 0,
+          totalMaxSlots: data.totalMaxSlots || 0,
+          usedSlots: data.usedSlots || 0,
+          remainingSlots: data.remainingSlots || 0,
+          savedPercentiles: data.savedPercentiles || [],
+        })
+        setIsPaid(!!data.hasAccess)
+        setIsIncludedInPlan(!!data.isIncludedInPlan)
+        setPlanName(data.planName || "")
+      }
+    } catch (err) {
+      console.error("Error checking slot purchase status:", err)
+    }
+  }, [session])
+
+  useEffect(() => {
     checkPurchase()
-  }, [session, capRound])
+  }, [checkPurchase])
 
   // 5. Handle Generate Preference List
   const handleGenerate = async (overridePercentile?: number) => {
@@ -237,6 +265,9 @@ export default function PreferenceListGeneratorPage() {
 
       if (!res.ok) {
         const err = await res.json()
+        if (err.slotStats) {
+          setSlotStats(err.slotStats)
+        }
         throw new Error(err.error || "Failed to generate preference list.")
       }
 
@@ -244,15 +275,10 @@ export default function PreferenceListGeneratorPage() {
       setResults(data.items || [])
       setTotalCount(data.totalCount || 0)
       setIsPaid(data.isPaid || false)
-      if (data.savedPercentile) {
-        setSavedPercentile(data.savedPercentile)
-      }
-      if (data.lockedPercentileMismatch && data.savedPercentile) {
-        setErrorMsg(
-          `This purchase for ${capRound} is permanently locked to percentile ${data.savedPercentile.toFixed(2)}%. Please use ${data.savedPercentile.toFixed(2)}% or purchase another Preference List plan to unlock percentile ${targetPercentile.toFixed(2)}%.`
-        )
-      }
       setHasGenerated(true)
+
+      // Refresh slot stats to update used/remaining counters & saved percentiles list
+      await checkPurchase()
     } catch (err: any) {
       console.error("Generation error:", err)
       setErrorMsg(err.message || "Failed to generate preference list.")
@@ -438,37 +464,47 @@ export default function PreferenceListGeneratorPage() {
             </h2>
 
             {/* Access / Plan Badge */}
-            {isPaid && (
-              isIncludedInPlan ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold shadow-2xs">
-                  <Sparkles className="h-4 w-4 text-blue-600" /> {planName || "Full Access Included with Plan"}
-                </span>
-              ) : savedPercentile !== null ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-2xs">
-                  <ShieldCheck className="h-4 w-4 text-emerald-600" /> Saved Percentile: {savedPercentile.toFixed(2)}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-2xs">
-                  <ShieldCheck className="h-4 w-4 text-emerald-600" /> Preference List Unlocked
-                </span>
-              )
+            {slotStats.hasAccess && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold shadow-2xs">
+                <Sparkles className="h-4 w-4 text-blue-600" /> {slotStats.planName || "Preference List Unlocked"} ({slotStats.usedSlots}/{slotStats.totalMaxSlots} Slots Used)
+              </span>
             )}
           </div>
 
-          {/* Predictor Saved Percentiles Selection */}
-          {predictorProfiles.length > 0 && (
-            <div className="rounded-xl bg-slate-50/80 border border-slate-200/80 p-3.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-blue-600" /> Predictor Saved Percentiles
-                </span>
-                <span className="text-[10px] text-slate-500 font-medium">Click to select for {capRound}</span>
+          {/* Saved Percentile Slots Bar */}
+          {session?.user && (
+            <div className="rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-slate-50 border border-blue-100 p-4 space-y-3 shadow-2xs">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-blue-100/80 pb-2.5">
+                <div>
+                  <h3 className="text-xs font-extrabold text-slate-900 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-blue-600" />
+                    Saved Percentiles ({slotStats.usedSlots} / {slotStats.totalMaxSlots} Slots Used)
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Valid for all CAP Rounds (Round 1–4) with unlimited regenerations.
+                  </p>
+                </div>
+
+                {slotStats.usedSlots >= slotStats.totalMaxSlots && slotStats.totalMaxSlots > 0 ? (
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100/90 px-2.5 py-1 rounded-full border border-amber-200">
+                    All Slots Used
+                  </span>
+                ) : slotStats.totalMaxSlots > 0 ? (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2.5 py-1 rounded-full border border-emerald-200">
+                    {slotStats.remainingSlots} Slot{slotStats.remainingSlots === 1 ? "" : "s"} Available
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+                    No Slots Included
+                  </span>
+                )}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {predictorProfiles.map((pVal) => {
+
+              {/* Saved Percentile Pills */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {slotStats.savedPercentiles.map((pVal) => {
                   const pStr = pVal.toFixed(2)
-                  const isSelected = percentile === pStr || percentile === String(pVal)
-                  const isLockedForCurrentRound = savedPercentile !== null && Math.abs(savedPercentile - pVal) < 0.05
+                  const isSelected = percentile === pStr || parseFloat(percentile) === pVal
 
                   return (
                     <button
@@ -477,21 +513,26 @@ export default function PreferenceListGeneratorPage() {
                       onClick={() => setPercentile(pStr)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
                         isSelected
-                          ? "bg-blue-600 text-white border-blue-600 shadow-xs scale-105"
-                          : isLockedForCurrentRound
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
-                          : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200"
+                          ? "bg-blue-600 text-white border-blue-600 shadow-2xs scale-105"
+                          : "bg-white hover:bg-blue-50 text-slate-700 border-slate-200"
                       }`}
                     >
                       <span>{pStr}%</span>
-                      {isLockedForCurrentRound && (
-                        <span className="text-[10px] bg-emerald-600 text-white px-1.5 py-0.2 rounded font-semibold">
-                          🔒 {capRound} Locked
-                        </span>
-                      )}
+                      <span className="text-[10px] opacity-75">🔒 Reusable</span>
                     </button>
                   )
                 })}
+
+                {/* Add-on Slot Purchase Trigger if slots full or free */}
+                {slotStats.usedSlots >= slotStats.totalMaxSlots && (
+                  <button
+                    type="button"
+                    onClick={handleUnlockPayment}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-2xs hover:scale-105 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Buy +1 Saved Percentile (₹599)
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -512,26 +553,16 @@ export default function PreferenceListGeneratorPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-semibold text-slate-700">Enter Percentile</label>
-                {isPaid && savedPercentile !== null && (
-                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                    Locked for {capRound}
-                  </span>
-                )}
               </div>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 max="100"
-                disabled={isPaid && savedPercentile !== null}
                 placeholder="e.g. 95.63"
                 value={percentile}
                 onChange={(e) => setPercentile(e.target.value)}
-                className={`w-full rounded-xl border px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 shadow-2xs transition-all focus:outline-none focus:ring-2 ${
-                  isPaid && savedPercentile !== null
-                    ? "bg-slate-100 border-slate-200 cursor-not-allowed font-bold"
-                    : "border-slate-200 bg-white focus:border-blue-500 focus:ring-blue-500/20"
-                }`}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 shadow-2xs transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-semibold"
               />
             </div>
 

@@ -58,10 +58,10 @@ export function DashboardClient() {
       setSub(updated)
     })
 
-    fetch("/api/preference-generator/purchase?round=Round%201")
+    fetch("/api/preference-generator/purchase")
       .then((res) => res.json())
       .then((data) => {
-        if (data.isPaid) setPrefPurchase(data)
+        if (data.hasAccess) setPrefPurchase(data)
       })
       .catch(() => {})
     
@@ -211,9 +211,11 @@ export function DashboardClient() {
                   Preference List Generator
                 </p>
                 <h3 className="font-heading text-xl font-bold text-slate-900">
-                  {sub.plan === "premium" || sub.plan === "elite"
-                    ? `Included in ${sub.plan.toUpperCase()} Plan`
-                    : `Preference List Generator (₹599)`}
+                  {sub.plan === "premium"
+                    ? "Included in Premium Plan"
+                    : sub.plan === "elite"
+                    ? "Included in Elite Plan"
+                    : "Preference List Unlocked"}
                 </h3>
               </div>
               <span className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700 shadow-2xs">
@@ -223,25 +225,25 @@ export function DashboardClient() {
 
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
               <div>
-                <p className="text-slate-500 mb-0.5 font-medium">CAP Round</p>
-                <p className="font-bold text-slate-800">{prefPurchase?.purchase?.round || "All Rounds"}</p>
+                <p className="text-slate-500 mb-0.5 font-medium">CAP Rounds</p>
+                <p className="font-bold text-slate-800">Round 1, 2, 3, 4</p>
               </div>
               <div>
-                <p className="text-slate-500 mb-0.5 font-medium">Saved Percentile</p>
-                <p className="font-bold text-slate-800">{prefPurchase?.purchase?.savedPercentile ? `${prefPurchase.purchase.savedPercentile}%` : "Unlocked"}</p>
+                <p className="text-slate-500 mb-0.5 font-medium">Saved Percentile Slots</p>
+                <p className="font-bold text-indigo-700">{prefPurchase?.usedSlots ?? 0} / {prefPurchase?.totalMaxSlots ?? 0} Used</p>
               </div>
               <div>
-                <p className="text-slate-500 mb-0.5 font-medium">Valid For</p>
-                <p className="font-bold text-indigo-700">Unlimited Generation</p>
+                <p className="text-slate-500 mb-0.5 font-medium">Validity</p>
+                <p className="font-bold text-slate-800">Unlimited</p>
               </div>
               <div>
-                <p className="text-slate-500 mb-0.5 font-medium">Expiry</p>
-                <p className="font-bold text-slate-800">No Expiry</p>
+                <p className="text-slate-500 mb-0.5 font-medium">Regeneration</p>
+                <p className="font-bold text-slate-800">Unlimited</p>
               </div>
             </div>
 
             <div className="mt-4 pt-3 border-t border-indigo-100 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Purchased On: <strong className="text-slate-700">{formatDate(prefPurchase?.purchase?.createdAt || sub.activatedAt)}</strong></span>
+              <span className="text-xs text-slate-500">Purchased Add-ons: <strong className="text-slate-700">+{prefPurchase?.purchasedSlots ?? 0} Extra Slots</strong></span>
               <Link href="/preference-list-generator" className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline">
                 Generate Preference List →
               </Link>

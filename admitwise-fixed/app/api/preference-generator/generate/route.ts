@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next"
 import { authOptions, CustomSession } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { PreferenceGeneratorService } from "@/lib/preference-generator/service"
+import { getPreferenceSlotStats } from "../purchase/route"
 import { z } from "zod"
 
 const generateSchema = z.object({
@@ -34,39 +35,56 @@ export async function POST(req: Request) {
 
     if (session && session.user) {
       try {
-        const userRecord = await db.user.findUnique({
-          where: { id: session.user.id },
-          select: { currentPlan: true },
-        })
+        const slotStats = await getPreferenceSlotStats(session.user.id)
+        isIncludedInPlan = slotStats.isIncludedInPlan
 
-        if (userRecord && (userRecord.currentPlan === "premium" || userRecord.currentPlan === "elite")) {
+        // Check if percentile matches an existing saved percentile profile (within 0.001 precision):
+        const existingPercentile = slotStats.savedPercentiles.find(
+          (sp) => Math.abs(sp - percentile) < 0.001
+        )
+
+        if (existingPercentile !== undefined) {
+          // Reusing existing Saved Percentile Profile -> Unlimited generations across ALL CAP rounds!
           isPaid = true
-          isIncludedInPlan = true
-        } else if (db && (db as any).preferenceGeneratorPurchase) {
-          const purchase = await db.preferenceGeneratorPurchase.findUnique({
-            where: {
-              userId_round: {
-                userId: session.user.id,
-                round,
-              },
-            },
-          })
-
-          if (purchase && purchase.status === "Paid") {
-            savedPercentile = purchase.savedPercentile
-            // Check if input percentile matches the locked percentile for this round
-            if (Math.abs(percentile - purchase.savedPercentile) < 0.05) {
-              isPaid = true
-              percentile = purchase.savedPercentile
-            } else {
-              // Mismatch: Purchased for a different percentile in this round
-              isPaid = false
-              lockedPercentileMismatch = true
+          percentile = existingPercentile
+          savedPercentile = existingPercentile
+        } else {
+          // New Percentile Profile
+          if (slotStats.usedSlots < slotStats.totalMaxSlots) {
+            // Save new percentile profile slot
+            if (db && (db as any).preferenceSavedPercentile) {
+              try {
+                await db.preferenceSavedPercentile.create({
+                  data: {
+                    userId: session.user.id,
+                    savedPercentile: percentile,
+                  },
+                })
+              } catch (saveErr) {
+                console.warn("Could not save to preferenceSavedPercentile:", saveErr)
+              }
             }
+            isPaid = true
+            savedPercentile = percentile
+          } else {
+            // Slots Exhausted! Block creation of new percentile.
+            isPaid = false
+            const planText = slotStats.currentPlan === "premium" ? "your Premium Plan" : slotStats.currentPlan === "elite" ? "your Elite Plan" : "your account"
+            return NextResponse.json(
+              {
+                success: false,
+                isPaid: false,
+                isIncludedInPlan,
+                slotLimitExhausted: true,
+                error: `You have used all ${slotStats.totalMaxSlots} saved percentile slots included in ${planText}. Purchase +1 Saved Percentile (₹599) to continue.`,
+                slotStats,
+              },
+              { status: 403 }
+            )
           }
         }
       } catch (e) {
-        console.error("Error looking up user plan or purchase record in generate API:", e)
+        console.error("Error evaluating preference slot stats in generate API:", e)
         isPaid = false
       }
     }

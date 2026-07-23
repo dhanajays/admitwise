@@ -75,6 +75,7 @@ export async function GET(req: Request) {
           role: true,
           predictionProfiles: true,
           preferenceGeneratorPurchases: true,
+          preferenceSavedPercentiles: true,
         },
       })
     } catch (queryErr: any) {
@@ -88,29 +89,36 @@ export async function GET(req: Request) {
       })
     }
 
-    const formatted = students.map((u: any) => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      mobile: u.mobile,
-      createdAt: u.createdAt,
-      lastLogin: u.lastLogin,
-      loginProvider: u.loginProvider,
-      currentPlan: u.currentPlan,
-      paymentStatus: u.paymentStatus,
-      profileLimit: u.profileLimit,
-      profilesUsed: u.profilesUsed,
-      isSuspended: u.isSuspended,
-      role: u.role?.name || "Student",
-      hasPreferenceAccess:
-        u.currentPlan === "premium" ||
-        u.currentPlan === "elite" ||
-        (Array.isArray(u.preferenceGeneratorPurchases) &&
-          u.preferenceGeneratorPurchases.some((p: any) => p.status === "Paid")),
-      preferencePurchases: Array.isArray(u.preferenceGeneratorPurchases)
-        ? u.preferenceGeneratorPurchases.filter((p: any) => p.status === "Paid")
-        : [],
-    }))
+    const formatted = students.map((u: any) => {
+      const includedSlots = u.currentPlan === "premium" ? 3 : u.currentPlan === "elite" ? 4 : 0
+      const purchasedAddons = Array.isArray(u.preferenceGeneratorPurchases)
+        ? u.preferenceGeneratorPurchases.filter((p: any) => p.status === "Paid").length
+        : 0
+      const totalMaxSlots = includedSlots + purchasedAddons
+      const usedSlots = Array.isArray(u.preferenceSavedPercentiles) ? u.preferenceSavedPercentiles.length : 0
+
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        mobile: u.mobile,
+        createdAt: u.createdAt,
+        lastLogin: u.lastLogin,
+        loginProvider: u.loginProvider,
+        currentPlan: u.currentPlan,
+        paymentStatus: u.paymentStatus,
+        profileLimit: u.profileLimit,
+        profilesUsed: u.profilesUsed,
+        isSuspended: u.isSuspended,
+        role: u.role?.name || "Student",
+        hasPreferenceAccess: totalMaxSlots > 0,
+        preferenceTotalSlots: totalMaxSlots,
+        preferenceUsedSlots: usedSlots,
+        preferencePurchases: Array.isArray(u.preferenceGeneratorPurchases)
+          ? u.preferenceGeneratorPurchases.filter((p: any) => p.status === "Paid")
+          : [],
+      }
+    })
 
     return NextResponse.json(formatted)
   } catch (error: any) {

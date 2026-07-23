@@ -101,6 +101,7 @@ model User {
   preferenceGeneratorDatasets PreferenceGeneratorDataset[] @relation("UserPreferenceDatasets")
   preferenceGeneratorPurchases PreferenceGeneratorPurchase[]
   preferenceGeneratorHistories PreferenceGeneratorHistory[]
+  preferenceSavedPercentiles PreferenceSavedPercentile[]
   notifications           Notification[]
   userProfile             UserProfile?
 }
@@ -526,8 +527,8 @@ model PreferenceCutoff {
 model PreferenceGeneratorPurchase {
   id              String   @id @default(cuid())
   userId          String
-  round           String   // "Round 1", "Round 2", "Round 3", "Round 4"
-  savedPercentile Float
+  round           String?  @default("ALL") // "ALL" or specific round
+  savedPercentile Float?
   paymentId       String?
   amount          Float    @default(599)
   status          String   @default("Paid") // "Paid", "Pending", "Failed"
@@ -536,7 +537,19 @@ model PreferenceGeneratorPurchase {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, round])
+  @@index([userId])
+}
+
+model PreferenceSavedPercentile {
+  id              String   @id @default(cuid())
+  userId          String
+  savedPercentile Float
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, savedPercentile])
+  @@index([userId])
 }
 
 model PreferenceGeneratorHistory {

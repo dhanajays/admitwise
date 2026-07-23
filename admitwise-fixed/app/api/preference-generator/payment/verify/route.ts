@@ -38,28 +38,16 @@ export async function POST(req: Request) {
       }
     }
 
-    // Upsert PreferenceGeneratorPurchase record
+    // Record PreferenceGeneratorPurchase & save percentile to PreferenceSavedPercentile
     let purchaseId = `purchase_${Date.now()}`
     let purchasePercentile = percentile
 
     if (db && (db as any).preferenceGeneratorPurchase) {
       try {
-        const purchase = await db.preferenceGeneratorPurchase.upsert({
-          where: {
-            userId_round: {
-              userId,
-              round,
-            },
-          },
-          update: {
-            savedPercentile: percentile,
-            paymentId: razorpay_payment_id,
-            status: "Paid",
-            amount: 599,
-          },
-          create: {
+        const purchase = await db.preferenceGeneratorPurchase.create({
+          data: {
             userId,
-            round,
+            round: round || "ALL",
             savedPercentile: percentile,
             paymentId: razorpay_payment_id,
             status: "Paid",
@@ -67,9 +55,29 @@ export async function POST(req: Request) {
           },
         })
         purchaseId = purchase.id
-        purchasePercentile = purchase.savedPercentile
+        purchasePercentile = purchase.savedPercentile || percentile
       } catch (err) {
-        console.error("Error upserting preference generator purchase:", err)
+        console.error("Error creating preference generator purchase:", err)
+      }
+    }
+
+    if (percentile !== undefined && percentile !== null && db && (db as any).preferenceSavedPercentile) {
+      try {
+        await db.preferenceSavedPercentile.upsert({
+          where: {
+            userId_savedPercentile: {
+              userId,
+              savedPercentile: percentile,
+            },
+          },
+          create: {
+            userId,
+            savedPercentile: percentile,
+          },
+          update: {},
+        })
+      } catch (err) {
+        console.error("Error saving to preferenceSavedPercentile:", err)
       }
     }
 
