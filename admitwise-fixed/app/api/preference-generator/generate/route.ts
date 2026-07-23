@@ -61,7 +61,7 @@ export async function POST(req: Request) {
           } else if (slotStats.totalMaxSlots === 0) {
             isPaid = false
           } else if (slotStats.usedSlots < slotStats.totalMaxSlots) {
-            // New Percentile Profile & Slot Available! Save slot into database
+            // New Percentile Profile & Slot Available! Save slot into database permanently
             if (db && (db as any).preferenceSavedPercentile) {
               try {
                 await db.preferenceSavedPercentile.upsert({
@@ -83,27 +83,9 @@ export async function POST(req: Request) {
             }
             isPaid = true
             savedPercentile = percentile
-          } else if (slotStats.purchasedSlots > 0 && slotStats.savedPercentiles.length > 0) {
-            // If user has 1 purchased slot and entering a new percentile, update/sync their saved percentile slot
-            const oldPercentile = slotStats.savedPercentiles[0]
-            if (db && (db as any).preferenceSavedPercentile && oldPercentile !== undefined) {
-              try {
-                await db.preferenceSavedPercentile.deleteMany({
-                  where: { userId: session.user.id },
-                })
-                await db.preferenceSavedPercentile.create({
-                  data: {
-                    userId: session.user.id,
-                    savedPercentile: percentile,
-                  },
-                })
-              } catch (e) {
-                console.warn("Could not update single slot saved percentile:", e)
-              }
-            }
-            isPaid = true
-            savedPercentile = percentile
           } else {
+            // All percentile profile slots are exhausted! Saved percentile is IMMUTABLE.
+            lockedPercentileMismatch = true
             isPaid = false
           }
         }
@@ -111,6 +93,20 @@ export async function POST(req: Request) {
         console.error("Error evaluating preference slot stats in generate API:", e)
         isPaid = false
       }
+    }
+
+    if (lockedPercentileMismatch) {
+      const slotStats = session?.user ? await getPreferenceSlotStats(session.user.id).catch(() => null) : null
+      const lockedVal = slotStats?.savedPercentiles[0] ?? "your saved"
+      return NextResponse.json(
+        {
+          success: false,
+          error: `You have already used your one allowed percentile profile (${lockedVal}%). To use another percentile, purchase an Additional Profile Add-on or upgrade your plan.`,
+          isPaid: false,
+          slotStats,
+        },
+        { status: 400 }
+      )
     }
 
     const result = await PreferenceGeneratorService.generatePreferenceList({
