@@ -64,9 +64,30 @@ export function resolvePreferenceDatasetPath(roundInput: string): {
 
   const fileName = `CAP Round ${roundNumber}.csv`
   const roundName = `CAP Round ${roundNumber}`
-  const filePath = path.join(process.cwd(), "dataset", fileName)
 
-  return { roundName, fileName, filePath, roundNumber }
+  // Candidate file paths for serverless / standalone environments
+  const candidatePaths = [
+    path.join(process.cwd(), "dataset", fileName),
+    path.join(process.cwd(), "public", "dataset", fileName),
+    path.resolve("./dataset", fileName),
+    path.resolve("./public/dataset", fileName),
+    path.join(__dirname, "..", "..", "dataset", fileName),
+    path.join(__dirname, "..", "..", "public", "dataset", fileName),
+  ]
+
+  let resolvedPath = candidatePaths[0]
+  for (const candidate of candidatePaths) {
+    try {
+      if (fs.existsSync(candidate)) {
+        resolvedPath = candidate
+        break
+      }
+    } catch {
+      // Continue to next candidate
+    }
+  }
+
+  return { roundName, fileName, filePath: resolvedPath, roundNumber }
 }
 
 export class PreferenceDatasetLoader {
@@ -83,17 +104,18 @@ export class PreferenceDatasetLoader {
     const { roundName, fileName, filePath, roundNumber } = resolvePreferenceDatasetPath(roundInput)
     const fileExists = fs.existsSync(filePath)
 
-    console.log(`\n=======================================================`)
-    console.log(`[PreferenceDatasetLoader] Loading dataset attempt:`)
-    console.log(`- Selected CAP Round: ${roundInput} (${roundName})`)
-    console.log(`- Target Dataset Path: ${filePath}`)
-    console.log(`- File Exists: ${fileExists ? "Yes" : "No"}`)
+    console.log(`========== DATASET REQUEST ==========`)
+    console.log(`Selected Round:`, roundInput, `(${roundName})`)
+    console.log(`Resolved Path:`, filePath)
+    console.log(`Absolute Path:`, path.resolve(filePath))
+    console.log(`process.cwd():`, process.cwd())
+    console.log(`File Exists:`, fileExists)
 
     // Handle missing dataset file
     if (!fileExists) {
       const errorMsg = `CAP Round ${roundNumber} dataset has not been uploaded yet.`
       console.warn(`- Status: Failed - ${errorMsg}`)
-      console.log(`=======================================================\n`)
+      console.log(`======================================\n`)
       return {
         success: false,
         records: [],

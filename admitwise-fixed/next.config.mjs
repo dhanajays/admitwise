@@ -16,6 +16,9 @@ const nextConfig = {
       },
     ],
   },
+  outputFileTracingIncludes: {
+    "/api/**/*": ["./dataset/**/*", "./public/dataset/**/*"],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "50mb",

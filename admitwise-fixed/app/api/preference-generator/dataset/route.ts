@@ -6,21 +6,22 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const round = searchParams.get("round") || "Round 1"
 
-    console.log(`\n-------------------------------------------------------`)
-    console.log(`[API GET /api/preference-generator/dataset] Target Round: "${round}"`)
+    console.log("========== DATASET REQUEST ==========")
+    console.log("URL:", req.url)
+    console.log("Selected Round:", round)
+    console.log("process.cwd():", process.cwd())
+
     const options = await PreferenceGeneratorService.getDatasetOptions(round)
 
-    console.log(`[API GET /api/preference-generator/dataset] Response Summary:`)
-    console.log(`- Status: ${options.error ? "Failed" : "Success"}`)
-    console.log(`- Total Unique Branches: ${options.branches ? options.branches.length : 0}`)
-    console.log(`- Total Unique Cities: ${options.cities ? options.cities.length : 0}`)
+    console.log("========== DATASET RESPONSE ==========")
+    console.log("Branches extracted count:", options.branches ? options.branches.length : 0)
+    console.log("Cities extracted count:", options.cities ? options.cities.length : 0)
     if (options.branches && options.branches.length > 0) {
-      console.log(`- Sample Branches (First 5):`, options.branches.slice(0, 5))
+      console.log("Sample Branches (First 5):", options.branches.slice(0, 5))
     }
     if (options.error) {
-      console.warn(`- Returned Error Message:`, options.error)
+      console.warn("Response contains error:", options.error)
     }
-    console.log(`-------------------------------------------------------\n`)
 
     return NextResponse.json(options)
   } catch (error: any) {

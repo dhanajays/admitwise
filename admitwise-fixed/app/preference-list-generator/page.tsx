@@ -111,8 +111,11 @@ export default function PreferenceListGeneratorPage() {
       setLoadingOptions(true)
       try {
         const res = await fetch(`/api/preference-generator/dataset?round=${encodeURIComponent(capRound)}`)
+        console.log("[Frontend fetchOptions] Response status:", res.status)
+        const textData = await res.clone().text()
+
         if (res.ok) {
-          const data = await res.json()
+          const data = JSON.parse(textData)
           if (data.error) {
             setErrorMsg(data.error)
             setAvailableBranches([])
@@ -123,10 +126,15 @@ export default function PreferenceListGeneratorPage() {
             setAvailableBranches(data.branches || [])
             setAvailableCities(["ANY", ...(data.cities || [])])
             setDatasetInfo(data.datasetInfo || null)
+            console.log("[Frontend fetchOptions] Received Branches:", (data.branches || []).length)
+            console.log("[Frontend fetchOptions] Received Cities:", (data.cities || []).length)
           }
+        } else {
+          setErrorMsg(`Failed to load dataset (HTTP ${res.status})`)
         }
       } catch (err) {
         console.error("Error fetching dataset options:", err)
+        setErrorMsg("Failed to load options for the selected CAP Round.")
       } finally {
         setLoadingOptions(false)
       }
