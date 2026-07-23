@@ -58,14 +58,14 @@ export async function GET() {
     }
 
     let activeSub = user.subscriptions[0] || null
-    let basePlan = "free"
-    let baseLimit = 0
+    let basePlan = user.currentPlan || "free"
+    let baseLimit = user.profileLimit || 0
 
     // Find highest active plan tier
     for (const sub of user.subscriptions) {
       const subTier = planTiers[sub.planId] || 0
-      const highestTier = planTiers[basePlan] || 0
-      if (subTier > highestTier) {
+      const currentTier = planTiers[basePlan] || 0
+      if (subTier > currentTier) {
         basePlan = sub.planId
         activeSub = sub
       }
@@ -77,7 +77,7 @@ export async function GET() {
         .filter((s) => s.planId === "single")
         .reduce((sum, s) => sum + s.maxProfiles, 0)
     } else {
-      baseLimit = activeSub ? activeSub.maxProfiles : 0
+      baseLimit = Math.max(activeSub ? activeSub.maxProfiles : 0, user.profileLimit || 0)
     }
 
     // Fetch successful add-on payments directly from database

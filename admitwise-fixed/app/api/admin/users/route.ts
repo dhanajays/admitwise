@@ -91,12 +91,14 @@ export async function GET(req: Request) {
     }
 
     const formatted = students.map((u: any) => {
+      const isFullPlan = u.currentPlan === "premium" || u.currentPlan === "elite"
       const includedSlots = u.currentPlan === "premium" ? 3 : u.currentPlan === "elite" ? 4 : 0
       const purchasedAddons = Array.isArray(u.preferenceGeneratorPurchases)
-        ? u.preferenceGeneratorPurchases.filter((p: any) => p.status === "Paid").length
+        ? u.preferenceGeneratorPurchases.filter((p: any) => (p.status || "").toLowerCase() === "paid").length
         : 0
-      const totalMaxSlots = includedSlots + purchasedAddons
+      const totalMaxSlots = isFullPlan ? includedSlots : (purchasedAddons > 0 ? purchasedAddons : 0)
       const usedSlots = Array.isArray(u.preferenceSavedPercentiles) ? u.preferenceSavedPercentiles.length : 0
+      const hasAccess = isFullPlan || purchasedAddons > 0
 
       return {
         id: u.id,
@@ -112,11 +114,11 @@ export async function GET(req: Request) {
         profilesUsed: u.profilesUsed,
         isSuspended: u.isSuspended,
         role: u.role?.name || "Student",
-        hasPreferenceAccess: totalMaxSlots > 0,
+        hasPreferenceAccess: hasAccess,
         preferenceTotalSlots: totalMaxSlots,
         preferenceUsedSlots: usedSlots,
         preferencePurchases: Array.isArray(u.preferenceGeneratorPurchases)
-          ? u.preferenceGeneratorPurchases.filter((p: any) => p.status === "Paid")
+          ? u.preferenceGeneratorPurchases.filter((p: any) => (p.status || "").toLowerCase() === "paid")
           : [],
       }
     })

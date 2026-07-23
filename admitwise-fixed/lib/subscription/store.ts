@@ -395,8 +395,8 @@ export function remainingTrackerProfiles(): number {
 
 /** True if the subscription is active (plan was purchased) */
 export function isSubscribed(): boolean {
-  const { maxProfiles, activatedAt } = safeRead()
-  return maxProfiles > 0 && !!activatedAt
+  const sub = safeRead()
+  return (!!sub.plan && sub.plan !== "free") || (sub.maxProfiles > 0 && !!sub.activatedAt)
 }
 
 /** Hard-reset (for testing / dev) */
