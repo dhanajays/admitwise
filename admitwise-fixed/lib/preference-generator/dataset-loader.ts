@@ -39,12 +39,34 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   city: ["city"],
 }
 
-function normalizeCapRoundFileName(roundInput: string): string {
+/**
+ * Central Preference List Dataset Resolver
+ * Dynamically resolves the exact CSV path inside project_root/dataset/ based on the selected CAP Round.
+ */
+export function resolvePreferenceDatasetPath(roundInput: string): {
+  roundName: string
+  fileName: string
+  filePath: string
+  roundNumber: number
+} {
   const clean = roundInput.trim().toLowerCase()
-  if (clean.includes("2") || clean === "2") return "CAP Round 2.csv"
-  if (clean.includes("3") || clean === "3") return "CAP Round 3.csv"
-  if (clean.includes("4") || clean === "4") return "CAP Round 4.csv"
-  return "CAP Round 1.csv"
+  let roundNumber = 1
+
+  if (clean.includes("2") || clean === "2") {
+    roundNumber = 2
+  } else if (clean.includes("3") || clean === "3") {
+    roundNumber = 3
+  } else if (clean.includes("4") || clean === "4") {
+    roundNumber = 4
+  } else {
+    roundNumber = 1
+  }
+
+  const fileName = `CAP Round ${roundNumber}.csv`
+  const roundName = `CAP Round ${roundNumber}`
+  const filePath = path.join(process.cwd(), "dataset", fileName)
+
+  return { roundName, fileName, filePath, roundNumber }
 }
 
 export class PreferenceDatasetLoader {
@@ -58,19 +80,24 @@ export class PreferenceDatasetLoader {
     roundName: string
     fileName: string
   } {
-    const fileName = normalizeCapRoundFileName(roundInput)
-    const roundName = fileName.replace(".csv", "")
+    const { roundName, fileName, filePath, roundNumber } = resolvePreferenceDatasetPath(roundInput)
+    const fileExists = fs.existsSync(filePath)
 
-    // Path to dataset folder: process.cwd() + "/dataset/" + fileName
-    const datasetDir = path.join(process.cwd(), "dataset")
-    const filePath = path.join(datasetDir, fileName)
+    console.log(`\n=======================================================`)
+    console.log(`[PreferenceDatasetLoader] Loading dataset attempt:`)
+    console.log(`- Selected CAP Round: ${roundInput} (${roundName})`)
+    console.log(`- Target Dataset Path: ${filePath}`)
+    console.log(`- File Exists: ${fileExists ? "Yes" : "No"}`)
 
     // Handle missing dataset file
-    if (!fs.existsSync(filePath)) {
+    if (!fileExists) {
+      const errorMsg = `CAP Round ${roundNumber} dataset has not been uploaded yet.`
+      console.warn(`- Status: Failed - ${errorMsg}`)
+      console.log(`=======================================================\n`)
       return {
         success: false,
         records: [],
-        error: `Preference List dataset for ${roundName} is not available yet. Please contact the administrator.`,
+        error: errorMsg,
         roundName,
         fileName,
       }
@@ -79,10 +106,13 @@ export class PreferenceDatasetLoader {
     try {
       const fileContent = fs.readFileSync(filePath, "utf-8")
       if (!fileContent || fileContent.trim().length === 0) {
+        const errorMsg = `CAP Round ${roundNumber} dataset file is empty.`
+        console.warn(`- Status: Failed - ${errorMsg}`)
+        console.log(`=======================================================\n`)
         return {
           success: false,
           records: [],
-          error: `Preference List dataset for ${roundName} is empty.`,
+          error: errorMsg,
           roundName,
           fileName,
         }
@@ -104,10 +134,13 @@ export class PreferenceDatasetLoader {
         })
 
         if (!hasCol) {
+          const errorMsg = `Missing required column: ${canonicalName} in ${fileName}`
+          console.error(`- Status: Failed - ${errorMsg}`)
+          console.log(`=======================================================\n`)
           return {
             success: false,
             records: [],
-            error: `Missing required column: ${canonicalName} in ${fileName}`,
+            error: errorMsg,
             roundName,
             fileName,
           }
@@ -122,6 +155,8 @@ export class PreferenceDatasetLoader {
       })
 
       if (parsed.errors && parsed.errors.length > 0 && parsed.data.length === 0) {
+        console.error(`- CSV Parsing Status: Failed - ${parsed.errors.length} errors`)
+        console.log(`=======================================================\n`)
         return {
           success: false,
           records: [],
@@ -178,6 +213,10 @@ export class PreferenceDatasetLoader {
         })
       }
 
+      console.log(`- CSV Parsing Status: Success`)
+      console.log(`- Number of rows loaded: ${records.length}`)
+      console.log(`=======================================================\n`)
+
       return {
         success: true,
         records,
@@ -185,7 +224,9 @@ export class PreferenceDatasetLoader {
         fileName,
       }
     } catch (err: any) {
-      console.error(`Error loading dataset for ${fileName}:`, err)
+      console.error(`- CSV Parsing Status: Fatal Error`)
+      console.error(`- Full error stack:`, err.stack || err)
+      console.log(`=======================================================\n`)
       return {
         success: false,
         records: [],

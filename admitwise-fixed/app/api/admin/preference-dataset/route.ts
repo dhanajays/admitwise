@@ -363,10 +363,18 @@ export async function POST(req: Request) {
       insertedCount += chunk.length
     }
 
-    console.log(`[Preference Dataset Upload] Rows Imported: ${insertedCount}`)
-    console.log(`[Preference Dataset Upload] Upload History Saved`)
-    console.log(`🎉 [Preference Dataset Upload] Upload Completed in ${(Date.now() - startTime)}ms`)
-    console.log("=======================================================\n")
+    // Step 7: Save file to dataset/ folder for Preference Generator dataset loader
+    try {
+      const datasetDir = path.join(process.cwd(), "dataset")
+      if (!fs.existsSync(datasetDir)) {
+        fs.mkdirSync(datasetDir, { recursive: true })
+      }
+      const targetPath = path.join(datasetDir, `CAP Round ${roundNumber}.csv`)
+      fs.copyFileSync(tmpFilePath, targetPath)
+      console.log(`[Preference Dataset Upload] CSV file synced to: ${targetPath}`)
+    } catch (copyErr) {
+      console.warn(`[Preference Dataset Upload] Warning syncing CSV to dataset/ folder:`, copyErr)
+    }
 
     // Delete temp file from disk
     if (tmpFilePath && fs.existsSync(tmpFilePath)) {
