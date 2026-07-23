@@ -127,6 +127,35 @@ export async function fulfillSuccessfulPayment(orderId: string, paymentId: strin
           trackerProfileLimit: nextTrackerLimit,
         },
       })
+    } else if (
+      updatedPayment.purchaseType?.startsWith("preference") ||
+      updatedPayment.planId === "preference_generator"
+    ) {
+      planName = "Preference List Generator (₹599)"
+
+      const purchaseModel = (tx as any)?.preferenceGeneratorPurchase || (db as any)?.preferenceGeneratorPurchase
+      if (purchaseModel) {
+        const existing = purchaseModel.findFirst
+          ? await purchaseModel.findFirst({ where: { userId: updatedPayment.userId, round: "ALL" } })
+          : null
+
+        if (existing && purchaseModel.update) {
+          await purchaseModel.update({
+            where: { id: existing.id },
+            data: { status: "Paid", amount: updatedPayment.amount || 599, paymentId: updatedPayment.paymentId },
+          })
+        } else if (purchaseModel.create) {
+          await purchaseModel.create({
+            data: {
+              userId: updatedPayment.userId,
+              round: "ALL",
+              status: "Paid",
+              amount: updatedPayment.amount || 599,
+              paymentId: updatedPayment.paymentId,
+            },
+          })
+        }
+      }
     }
 
     await tx.activityLog.create({
@@ -407,9 +436,10 @@ export async function fulfillAdminGrant(params: AdminGrantParams) {
       }
     }
 
-    // Case C: ₹599 Preference List Access for a specific round
+    // Case C: ₹599 Preference List Access for all rounds
     const amount = 599
-    const planName = `Preference List Generator (₹599) - ${round}`
+    const targetRound = "ALL"
+    const planName = `Preference List Generator (₹599)`
 
     // 1. Create Payment record in Payment table (mirroring Razorpay)
     if (db.payment) {
@@ -433,29 +463,31 @@ export async function fulfillAdminGrant(params: AdminGrantParams) {
     const purchaseModel = (tx as any)?.preferenceGeneratorPurchase || (db as any)?.preferenceGeneratorPurchase
     if (purchaseModel) {
       const existing = purchaseModel.findFirst
-        ? await purchaseModel.findFirst({ where: { userId, round } })
+        ? await purchaseModel.findFirst({ where: { userId, round: targetRound } })
         : null
 
       if (existing && purchaseModel.update) {
         await purchaseModel.update({
           where: { id: existing.id },
-          data: { status: "Paid", savedPercentile: percentile, amount, paymentId },
+          data: { status: "Paid", savedPercentile: percentile || null, amount, paymentId },
         })
       } else if (purchaseModel.create) {
         await purchaseModel.create({
-          data: { userId, round, savedPercentile: percentile, status: "Paid", amount, paymentId },
+          data: { userId, round: targetRound, savedPercentile: percentile || null, status: "Paid", amount, paymentId },
         })
       }
     }
 
-    // 3. Upsert PreferenceSavedPercentile
-    const savedModel = (tx as any)?.preferenceSavedPercentile || (db as any)?.preferenceSavedPercentile
-    if (savedModel && savedModel.upsert) {
-      await savedModel.upsert({
-        where: { userId_savedPercentile: { userId, savedPercentile: percentile } },
-        create: { userId, savedPercentile: percentile },
-        update: {},
-      })
+    // 3. Upsert PreferenceSavedPercentile if percentile provided
+    if (percentile !== undefined && percentile !== null) {
+      const savedModel = (tx as any)?.preferenceSavedPercentile || (db as any)?.preferenceSavedPercentile
+      if (savedModel && savedModel.upsert) {
+        await savedModel.upsert({
+          where: { userId_savedPercentile: { userId, savedPercentile: percentile } },
+          create: { userId, savedPercentile: percentile },
+          update: {},
+        })
+      }
     }
 
     // 4. Record ActivityLog
@@ -469,10 +501,10 @@ export async function fulfillAdminGrant(params: AdminGrantParams) {
 
     return {
       success: true,
-      message: `Granted Preference List access for ${round}`,
+      message: `Granted Preference List access successfully`,
       plan: user.currentPlan || "free",
       allowedSavedPercentiles: 1,
-      allowedRounds: [round],
+      allowedRounds: ["Round 1", "Round 2", "Round 3", "Round 4"],
     }
   })
 }
@@ -573,18 +605,10 @@ export async function getPreferenceListAccess(userId: string): Promise<Preferenc
   const usedSlots = savedPercentiles.length
   const remainingSlots = Math.max(0, totalMaxSlots - usedSlots)
   const hasAccess = isFullPlan || paidPurchases.length > 0 || totalMaxSlots > 0
-
-  let allowedRounds = ["Round 1", "Round 2", "Round 3", "Round 4"]
-  if (!isFullPlan) {
-    const hasAll = paidPurchases.some((p) => p.round === "ALL")
-    if (!hasAll) {
-      const specificRounds = Array.from(new Set(paidPurchases.map((p) => p.round).filter(Boolean)))
-      allowedRounds = specificRounds.length > 0 ? (specificRounds as string[]) : ["Round 1"]
-    }
-  }
+  const allowedRounds = hasAccess ? ["Round 1", "Round 2", "Round 3", "Round 4"] : []
 
   if (!isFullPlan && paidPurchases.length > 0 && planName === "Free Plan") {
-    planName = `Preference List (${paidPurchases[0]?.round || "Round 1"})`
+    planName = "Preference List Generator (₹599)"
   }
 
   return {
