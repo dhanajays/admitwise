@@ -47,14 +47,6 @@ export async function POST(req: Request) {
       orderId: razorpay_order_id,
     })
 
-    isValid = verifyRazorpaySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature)
-    console.log("ℹ️ Signature validation result:", {
-      isValid,
-      orderId: razorpay_order_id,
-      paymentId: razorpay_payment_id,
-      signature: razorpay_signature,
-    })
-
     paymentRecord = await db.payment.findUnique({
       where: { orderId: razorpay_order_id },
     })
@@ -62,6 +54,14 @@ export async function POST(req: Request) {
       paymentRecordId: paymentRecord?.id,
       paymentUserId: paymentRecord?.userId,
       orderId: razorpay_order_id,
+    })
+
+    isValid = verifyRazorpaySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature, paymentRecord?.purchaseType)
+    console.log("ℹ️ Signature validation result:", {
+      isValid,
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+      signature: razorpay_signature,
     })
 
     if (paymentRecord && paymentRecord.userId !== sessionUserId) {

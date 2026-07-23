@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     // Verify signature unless mock in development
     const isMock = razorpay_order_id.startsWith("order_mock_") || razorpay_payment_id.startsWith("pay_mock_")
     if (!isMock) {
-      const isValid = verifyRazorpaySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature)
+      const isValid = verifyRazorpaySignature(razorpay_order_id, razorpay_payment_id, razorpay_signature, "preference_generator")
       if (!isValid) {
         return NextResponse.json({ error: "Payment verification failed" }, { status: 400 })
       }

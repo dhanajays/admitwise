@@ -25,7 +25,7 @@ export async function checkout({
   onError?: (err: string) => void
 }) {
   try {
-    const loaded = await loadScript("https://checkout.razorpay.com/v1/checkout.js")
+    const loaded = await loadRazorpayScript("https://checkout.razorpay.com/v1/checkout.js")
     if (!loaded) {
       throw new Error("Razorpay SDK failed to load. Please check your network connection.")
     }

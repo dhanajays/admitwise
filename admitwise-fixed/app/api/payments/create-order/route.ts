@@ -112,7 +112,8 @@ export async function POST(req: Request) {
 
     // Create Razorpay Order only after successful user validation
     const receiptId = `rcpt_${userId.slice(-6)}_${Date.now().toString().slice(-6)}`
-    const order = await createRazorpayOrder(amount, receiptId)
+    const productIdentifier = purchaseType === "plan" ? (planDetails?.name || planId) : purchaseType
+    const order = await createRazorpayOrder(amount, receiptId, productIdentifier)
 
     // Log payment attempt in database
     try {
@@ -151,7 +152,7 @@ export async function POST(req: Request) {
       currency: order.currency,
       receipt: order.receipt,
       status: order.status,
-      key: getRazorpayKeyId(),
+      key: order.keyId || getRazorpayKeyId(productIdentifier),
       user: {
         name: session.user.name,
         email: session.user.email,

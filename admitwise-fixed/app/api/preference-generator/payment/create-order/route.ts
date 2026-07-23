@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     }
 
     const receiptId = `pref_${userId.slice(-6)}_${Date.now().toString().slice(-6)}`
-    const order = await createRazorpayOrder(amount, receiptId)
+    const order = await createRazorpayOrder(amount, receiptId, "preference_generator")
 
     // Log payment attempt in standard Payment table as well
     const baseAmount = amount / 1.18
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      key: getRazorpayKeyId(),
+      key: order.keyId || getRazorpayKeyId("preference_generator"),
       mock: (order as any).mock || false,
       user: {
         name: session.user.name,
