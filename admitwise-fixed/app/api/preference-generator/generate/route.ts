@@ -37,23 +37,20 @@ export async function POST(req: Request) {
     if (session && session.user) {
       try {
         entitlement = await evaluatePreferenceListAccess(session.user.id, round, percentile)
-        isPaid = entitlement.hasAccess && !entitlement.previewOnly
 
-        // If round IS purchased and entered percentile is new, save it permanently
-        if (entitlement.hasAccess && !entitlement.previewOnly) {
-          const isAlreadySaved = entitlement.savedPercentiles.some((sp) => Math.abs(sp - percentile) < 0.001)
-          if (!isAlreadySaved && db && (db as any).preferenceSavedPercentile) {
-            try {
-              await db.preferenceSavedPercentile.upsert({
-                where: { userId_savedPercentile: { userId: session.user.id, savedPercentile: percentile } },
-                create: { userId: session.user.id, savedPercentile: percentile },
-                update: {},
-              })
-            } catch (saveErr) {
-              console.warn("Could not save to preferenceSavedPercentile:", saveErr)
-            }
-          }
+        if (entitlement.statusState === "PAID_ROUND_UNSAVED_PERCENTILE") {
+          return NextResponse.json(
+            {
+              success: false,
+              error: entitlement.message || "You don't have this percentile saved. Purchase +1 Saved Percentile (₹599) to use this percentile.",
+              isBlockedPercentile: true,
+              entitlement,
+            },
+            { status: 400 }
+          )
         }
+
+        isPaid = entitlement.statusState === "PAID_ROUND_SAVED_PERCENTILE"
       } catch (e) {
         console.error("Error evaluating central preference entitlement in generate API:", e)
         isPaid = false
@@ -106,6 +103,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       isPaid,
+      isPreview: !isPaid,
       isIncludedInPlan: entitlement?.isFullPlan || false,
       totalCount,
       previewCount,

@@ -210,28 +210,35 @@ export default function PreferenceListGeneratorPage() {
       const res = await fetch("/api/preference-generator/purchase")
       if (res.ok) {
         const data = await res.json()
+        const savedList = data.savedPercentiles || []
+        const roundList = data.allowedRounds || []
+        const isFullPlan = !!data.isIncludedInPlan
+        const pVal = parseFloat(percentile)
+        const isRoundPurchased = isFullPlan || roundList.includes(capRound)
+        const isSavedPerc = !isNaN(pVal) && savedList.some((sp: number) => Math.abs(sp - pVal) < 0.01)
+
         setSlotStats({
           hasAccess: !!data.hasAccess,
-          isIncludedInPlan: !!data.isIncludedInPlan,
+          isIncludedInPlan: isFullPlan,
           planName: data.planName || "",
           includedSlots: data.includedSlots || 0,
           purchasedSlots: data.purchasedSlots || 0,
           totalMaxSlots: data.totalMaxSlots || 0,
           usedSlots: data.usedSlots || 0,
           remainingSlots: data.remainingSlots || 0,
-          savedPercentiles: data.savedPercentiles || [],
-          allowedRounds: data.allowedRounds || [],
+          savedPercentiles: savedList,
+          allowedRounds: roundList,
           purchases: data.purchases || [],
         })
-        const isRoundAllowed = !!data.isIncludedInPlan || (Array.isArray(data.allowedRounds) && data.allowedRounds.includes(capRound))
-        setIsPaid(isRoundAllowed)
-        setIsIncludedInPlan(!!data.isIncludedInPlan)
+
+        setIsPaid(isFullPlan || (isRoundPurchased && isSavedPerc))
+        setIsIncludedInPlan(isFullPlan)
         setPlanName(data.planName || "")
       }
     } catch (err) {
       console.error("Error checking slot purchase status:", err)
     }
-  }, [session, capRound])
+  }, [session, capRound, percentile])
 
   useEffect(() => {
     checkPurchase()
@@ -312,6 +319,11 @@ export default function PreferenceListGeneratorPage() {
         if (err.slotStats) {
           setSlotStats(err.slotStats)
         }
+        if (err.isBlockedPercentile) {
+          setResults([])
+          setHasGenerated(false)
+          setIsPaid(false)
+        }
         throw new Error(err.error || "Failed to generate preference list.")
       }
 
@@ -338,8 +350,8 @@ export default function PreferenceListGeneratorPage() {
       return
     }
 
-    const currentPerc = isPaid && savedPercentile ? savedPercentile : parseFloat(percentile)
-    if (isNaN(currentPerc) || currentPerc <= 0) {
+    const currentPerc = parseFloat(percentile)
+    if (isNaN(currentPerc) || currentPerc <= 0 || currentPerc > 100) {
       setErrorMsg("Please enter a valid percentile before unlocking.")
       return
     }

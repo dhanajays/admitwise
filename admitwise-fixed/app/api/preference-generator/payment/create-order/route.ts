@@ -44,12 +44,11 @@ export async function POST(req: Request) {
     let existing = null
     if (db && (db as any).preferenceGeneratorPurchase) {
       try {
-        existing = await db.preferenceGeneratorPurchase.findUnique({
+        existing = await db.preferenceGeneratorPurchase.findFirst({
           where: {
-            userId_round: {
-              userId,
-              round,
-            },
+            userId,
+            round,
+            status: "Paid",
           },
         })
       } catch (err) {
@@ -57,13 +56,30 @@ export async function POST(req: Request) {
       }
     }
 
-    if (existing && existing.status === "Paid") {
-      if (Math.abs(existing.savedPercentile - percentile) < 0.05) {
-        return NextResponse.json(
-          { error: `You have already unlocked ${round} for percentile ${existing.savedPercentile}%.` },
-          { status: 400 }
-        )
+    // Check if percentile is already saved
+    let isPercentileSaved = false
+    if (db && (db as any).preferenceSavedPercentile) {
+      try {
+        const saved = await db.preferenceSavedPercentile.findFirst({
+          where: {
+            userId,
+            savedPercentile: {
+              gte: percentile - 0.01,
+              lte: percentile + 0.01,
+            },
+          },
+        })
+        if (saved) isPercentileSaved = true
+      } catch (err) {
+        console.warn("Saved percentile check failed:", err)
       }
+    }
+
+    if (existing && isPercentileSaved) {
+      return NextResponse.json(
+        { error: `You have already unlocked ${round} for percentile ${percentile}%.` },
+        { status: 400 }
+      )
     }
 
     const receiptId = `pref_${userId.slice(-6)}_${Date.now().toString().slice(-6)}`

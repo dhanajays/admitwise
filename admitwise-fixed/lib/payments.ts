@@ -648,6 +648,8 @@ export interface PreferenceEntitlement {
   showFullList: boolean
   allowedPercentile: boolean
   savePercentileAfterPurchase: boolean
+  statusState: "UNPAID_ROUND" | "PAID_ROUND_SAVED_PERCENTILE" | "PAID_ROUND_UNSAVED_PERCENTILE"
+  message: string
   isFullPlan: boolean
   planName: string
   allowedRounds: string[]
@@ -668,13 +670,13 @@ export async function getPreferenceListEntitlement(
   const hasRoundAccess = isFullPlan || access.allowedRounds.includes(selectedRound) || access.allowedRounds.includes("ALL")
 
   const hasSavedPercentile = access.savedPercentiles.some(
-    (sp) => Math.abs(sp - enteredPercentile) < 0.001
+    (sp) => Math.abs(sp - enteredPercentile) < 0.01
   )
 
-  const allowedPercentile = isFullPlan || hasSavedPercentile || access.usedSlots < access.totalMaxSlots || access.savedPercentiles.length === 0
-
+  // RULE 9 Decision Flow:
+  // Step 1: Has the student purchased this CAP Round?
   if (!hasRoundAccess) {
-    // RULE 2: Selected CAP Round is NOT purchased -> ALWAYS Preview Mode (Top 5, PDF disabled, Payment CTA shown)
+    // Round is NOT purchased -> Always Preview Mode (Top 5 colleges, blur remaining, PDF disabled, ₹599 Purchase button)
     return {
       hasRoundAccess: false,
       hasSavedPercentile,
@@ -682,8 +684,10 @@ export async function getPreferenceListEntitlement(
       showPaymentCTA: true,
       enablePdf: false,
       showFullList: false,
-      allowedPercentile,
+      allowedPercentile: false,
       savePercentileAfterPurchase: !hasSavedPercentile,
+      statusState: "UNPAID_ROUND",
+      message: `Purchase ${selectedRound} (₹599) to unlock full preference list.`,
       isFullPlan: false,
       planName: access.planName,
       allowedRounds: access.allowedRounds,
@@ -694,18 +698,21 @@ export async function getPreferenceListEntitlement(
     }
   }
 
-  if (!allowedPercentile) {
-    // Round purchased but slots exhausted and percentile not saved -> Blocked
+  // Step 2: CAP Round IS purchased -> Check: Is the entered percentile already saved? (or Full Plan)
+  if (hasSavedPercentile || isFullPlan) {
+    // Unlock everything: Full list, PDF enabled, No payment
     return {
       hasRoundAccess: true,
-      hasSavedPercentile: false,
-      isPreview: true,
-      showPaymentCTA: true,
-      enablePdf: false,
-      showFullList: false,
-      allowedPercentile: false,
+      hasSavedPercentile: true,
+      isPreview: false,
+      showPaymentCTA: false,
+      enablePdf: true,
+      showFullList: true,
+      allowedPercentile: true,
       savePercentileAfterPurchase: false,
-      isFullPlan: false,
+      statusState: "PAID_ROUND_SAVED_PERCENTILE",
+      message: "Full Preference List unlocked.",
+      isFullPlan,
       planName: access.planName,
       allowedRounds: access.allowedRounds,
       savedPercentiles: access.savedPercentiles,
@@ -715,17 +722,20 @@ export async function getPreferenceListEntitlement(
     }
   }
 
-  // RULE 1 & 4: Round purchased AND Percentile allowed/saved -> FULL UNLOCKED!
+  // Rule 6: CAP Round is purchased, but entered percentile is NOT saved.
+  // Do NOT generate list. Prompt to purchase +1 Saved Percentile (₹599).
   return {
     hasRoundAccess: true,
-    hasSavedPercentile: true,
+    hasSavedPercentile: false,
     isPreview: false,
-    showPaymentCTA: false,
-    enablePdf: true,
-    showFullList: true,
-    allowedPercentile: true,
-    savePercentileAfterPurchase: false,
-    isFullPlan,
+    showPaymentCTA: true,
+    enablePdf: false,
+    showFullList: false,
+    allowedPercentile: false,
+    savePercentileAfterPurchase: true,
+    statusState: "PAID_ROUND_UNSAVED_PERCENTILE",
+    message: "You don't have this percentile saved. Purchase +1 Saved Percentile (₹599) to use this percentile.",
+    isFullPlan: false,
     planName: access.planName,
     allowedRounds: access.allowedRounds,
     savedPercentiles: access.savedPercentiles,
@@ -743,6 +753,8 @@ export interface EntitlementResult {
   planName: string
   allowedRounds: string[]
   savedPercentiles: number[]
+  statusState: "UNPAID_ROUND" | "PAID_ROUND_SAVED_PERCENTILE" | "PAID_ROUND_UNSAVED_PERCENTILE"
+  message: string
   reason?: string
 }
 
@@ -760,5 +772,8 @@ export async function evaluatePreferenceListAccess(
     planName: entitlement.planName,
     allowedRounds: entitlement.allowedRounds,
     savedPercentiles: entitlement.savedPercentiles,
+    statusState: entitlement.statusState,
+    message: entitlement.message,
+    reason: entitlement.message,
   }
 }

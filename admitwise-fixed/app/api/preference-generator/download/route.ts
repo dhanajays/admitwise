@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions, CustomSession } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { getPreferenceListAccess } from "@/lib/payments"
+import { getPreferenceListAccess, getPreferenceListEntitlement } from "@/lib/payments"
 import { PreferenceGeneratorService } from "@/lib/preference-generator/service"
 import { generatePreferencePDF } from "@/lib/preference-generator/pdf-generator"
 import { z } from "zod"
@@ -33,12 +33,10 @@ export async function POST(req: Request) {
     let { percentile, round, preferredBranches, preferredCities, category, gender, pwd } = parsed.data
 
     // Check Preference List access via centralized single source of truth
-    const access = await getPreferenceListAccess(session.user.id)
-    const isPaid = access.hasAccess && (access.isFullPlan || access.allowedRounds.includes(round) || access.purchases.length > 0)
-
-    if (!isPaid) {
+    const entitlement = await getPreferenceListEntitlement(session.user.id, round, percentile)
+    if (!entitlement.enablePdf || !entitlement.showFullList) {
       return NextResponse.json(
-        { error: `You must unlock ${round} for percentile ${percentile}% before downloading the PDF preference list.` },
+        { error: entitlement.message || `You must unlock ${round} for percentile ${percentile}% before downloading the PDF preference list.` },
         { status: 403 }
       )
     }
