@@ -5,18 +5,25 @@ declare global {
   var prisma: PrismaClient | undefined
 }
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
-})
+function createPrismaClient(): PrismaClient {
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    throw new Error(
+      "[db] DATABASE_URL is not defined. Check your .env file or deployment environment variables."
+    )
+  }
+  const adapter = new PrismaPg({ connectionString })
+  return new PrismaClient({ adapter })
+}
 
 function getPrismaClient(): PrismaClient {
   if (process.env.NODE_ENV === "production") {
-    return new PrismaClient({ adapter })
+    return createPrismaClient()
   }
 
-  // In development, ensure cached client has all latest models
+  // In development, reuse the cached singleton across HMR reloads
   if (!globalThis.prisma || !("preferenceGeneratorPurchase" in globalThis.prisma)) {
-    globalThis.prisma = new PrismaClient({ adapter })
+    globalThis.prisma = createPrismaClient()
   }
 
   return globalThis.prisma
@@ -24,3 +31,4 @@ function getPrismaClient(): PrismaClient {
 
 export const db = getPrismaClient()
 export default db
+

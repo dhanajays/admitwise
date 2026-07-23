@@ -23,24 +23,41 @@ export async function GET(req: Request) {
 
     // If userId specified, return their full details + prediction history
     if (userId) {
-      const student = await db.user.findUnique({
-        where: { id: userId },
-        include: {
-          predictionProfiles: true,
-          predictionHistories: {
-            orderBy: { createdAt: "desc" },
+      let student: any = null
+      try {
+        student = await db.user.findUnique({
+          where: { id: userId },
+          include: {
+            predictionProfiles: true,
+            predictionHistories: {
+              orderBy: { createdAt: "desc" },
+            },
+            payments: {
+              orderBy: { createdAt: "desc" },
+            },
+            preferenceGeneratorPurchases: {
+              orderBy: { createdAt: "desc" },
+            },
+            preferenceGeneratorHistories: {
+              orderBy: { createdAt: "desc" },
+            },
           },
-          payments: {
-            orderBy: { createdAt: "desc" },
+        })
+      } catch (detailErr: any) {
+        console.error("[admin/users GET] findUnique fallback triggered:", detailErr.message)
+        student = await db.user.findUnique({
+          where: { id: userId },
+          include: {
+            predictionProfiles: true,
+            predictionHistories: {
+              orderBy: { createdAt: "desc" },
+            },
+            payments: {
+              orderBy: { createdAt: "desc" },
+            },
           },
-          preferenceGeneratorPurchases: {
-            orderBy: { createdAt: "desc" },
-          },
-          preferenceGeneratorHistories: {
-            orderBy: { createdAt: "desc" },
-          },
-        },
-      })
+        })
+      }
 
       if (!student) {
         return NextResponse.json({ error: "Student not found" }, { status: 404 })
@@ -49,17 +66,29 @@ export async function GET(req: Request) {
       return NextResponse.json(student)
     }
 
-    // Otherwise list all students (users with Role = Student or null, or any non-admin)
-    const students = await db.user.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        role: true,
-        predictionProfiles: true,
-        preferenceGeneratorPurchases: true,
-      },
-    })
+    // Otherwise list all students
+    let students: any[] = []
+    try {
+      students = await db.user.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          role: true,
+          predictionProfiles: true,
+          preferenceGeneratorPurchases: true,
+        },
+      })
+    } catch (queryErr: any) {
+      console.error("[admin/users GET] findMany fallback triggered:", queryErr.message)
+      students = await db.user.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          role: true,
+          predictionProfiles: true,
+        },
+      })
+    }
 
-    const formatted = students.map((u) => ({
+    const formatted = students.map((u: any) => ({
       id: u.id,
       name: u.name,
       email: u.email,
@@ -73,16 +102,23 @@ export async function GET(req: Request) {
       profilesUsed: u.profilesUsed,
       isSuspended: u.isSuspended,
       role: u.role?.name || "Student",
-      hasPreferenceAccess: u.currentPlan === "premium" || u.currentPlan === "elite" || u.preferenceGeneratorPurchases.some((p) => p.status === "Paid"),
-      preferencePurchases: u.preferenceGeneratorPurchases.filter((p) => p.status === "Paid"),
+      hasPreferenceAccess:
+        u.currentPlan === "premium" ||
+        u.currentPlan === "elite" ||
+        (Array.isArray(u.preferenceGeneratorPurchases) &&
+          u.preferenceGeneratorPurchases.some((p: any) => p.status === "Paid")),
+      preferencePurchases: Array.isArray(u.preferenceGeneratorPurchases)
+        ? u.preferenceGeneratorPurchases.filter((p: any) => p.status === "Paid")
+        : [],
     }))
 
     return NextResponse.json(formatted)
-  } catch (error) {
-    console.error("Error in /api/admin/users GET:", error)
+  } catch (error: any) {
+    console.error("[admin/users GET] Error fetching users:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
+
 
 export async function POST(req: Request) {
   try {
