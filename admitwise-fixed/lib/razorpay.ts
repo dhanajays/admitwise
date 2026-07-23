@@ -13,9 +13,8 @@ export function getRazorpayCredentialsForProduct(productType?: string | null) {
     const keyId =
       process.env.RAZORPAY_TEST_KEY_ID ||
       process.env.NEXT_PUBLIC_RAZORPAY_TEST_KEY_ID ||
-      "rzp_test_TH3gw79Ps4yl9K"
-    const keySecret =
-      process.env.RAZORPAY_TEST_KEY_SECRET || "bwye64I1huGjsIRgoH7zfJ6j"
+      ""
+    const keySecret = process.env.RAZORPAY_TEST_KEY_SECRET || ""
     return { keyId, keySecret, isTest: true }
   }
 
@@ -23,11 +22,11 @@ export function getRazorpayCredentialsForProduct(productType?: string | null) {
     process.env.RAZORPAY_LIVE_KEY_ID ||
     process.env.RAZORPAY_KEY_ID ||
     process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
-    "rzp_live_T8xY9cnpDvuIet"
+    ""
   const keySecret =
     process.env.RAZORPAY_LIVE_KEY_SECRET ||
     process.env.RAZORPAY_KEY_SECRET ||
-    "w9KHRXh5I7v0pozqBZwBCRIi"
+    ""
   return { keyId, keySecret, isTest: false }
 }
 
@@ -112,6 +111,11 @@ export function verifyRazorpaySignature(
 
   try {
     const { keySecret } = getRazorpayCredentialsForProduct(productType)
+    if (!keySecret) {
+      console.error("❌ Missing Razorpay Key Secret for signature verification")
+      return false
+    }
+
     const hmac = crypto.createHmac("sha256", keySecret)
     hmac.update(`${orderId}|${paymentId}`)
     const generatedSignature = hmac.digest("hex")
@@ -120,14 +124,21 @@ export function verifyRazorpaySignature(
       return true
     }
 
-    // Defensive fallback: check alternate keySecret if productType wasn't passed explicitly
-    const alternateSecret = keySecret.includes("bwye64I1huGjsIRgoH7zfJ6j")
-      ? (process.env.RAZORPAY_LIVE_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || "w9KHRXh5I7v0pozqBZwBCRIi")
-      : (process.env.RAZORPAY_TEST_KEY_SECRET || "bwye64I1huGjsIRgoH7zfJ6j")
+    // Check alternate keySecret from environment variables if productType was omitted
+    const alternateSecret =
+      process.env.RAZORPAY_TEST_KEY_SECRET === keySecret
+        ? process.env.RAZORPAY_LIVE_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET
+        : process.env.RAZORPAY_TEST_KEY_SECRET
 
-    const altHmac = crypto.createHmac("sha256", alternateSecret)
-    altHmac.update(`${orderId}|${paymentId}`)
-    return altHmac.digest("hex") === signature
+    if (alternateSecret) {
+      const altHmac = crypto.createHmac("sha256", alternateSecret)
+      altHmac.update(`${orderId}|${paymentId}`)
+      if (altHmac.digest("hex") === signature) {
+        return true
+      }
+    }
+
+    return false
   } catch (error) {
     console.error("❌ Razorpay Signature Verification failed:", error)
     return false
