@@ -97,11 +97,20 @@ export async function POST(req: Request) {
 
     if (lockedPercentileMismatch) {
       const slotStats = session?.user ? await getPreferenceSlotStats(session.user.id).catch(() => null) : null
-      const lockedVal = slotStats?.savedPercentiles[0] ?? "your saved"
+      const savedList = slotStats?.savedPercentiles || []
+      let errorMsg = ""
+      if (savedList.length === 1) {
+        errorMsg = `You have already used your allowed percentile profile (${savedList[0]}%). Purchase +1 Saved Percentile (₹599) to use another percentile.`
+      } else if (savedList.length > 1) {
+        const formattedList = savedList.map((p) => `${p}%`).join(", ")
+        errorMsg = `You have already used all of your saved percentile profiles. Your saved percentiles are: ${formattedList}. Purchase +1 Saved Percentile (₹599) to use another percentile.`
+      } else {
+        errorMsg = `You have already used your allowed saved percentile profile limit. Purchase +1 Saved Percentile (₹599) to use another percentile.`
+      }
       return NextResponse.json(
         {
           success: false,
-          error: `You have already used your one allowed percentile profile (${lockedVal}%). To use another percentile, purchase an Additional Profile Add-on or upgrade your plan.`,
+          error: errorMsg,
           isPaid: false,
           slotStats,
         },
