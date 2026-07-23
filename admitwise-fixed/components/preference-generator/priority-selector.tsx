@@ -47,13 +47,7 @@ export function PrioritySelector({
       return
     }
 
-    if (item.toUpperCase() === "ANY") {
-      onChange(["ANY"])
-    } else {
-      // Remove ANY if specific item is selected
-      const cleaned = selected.filter((s) => s.toUpperCase() !== "ANY")
-      onChange([...cleaned, item])
-    }
+    onChange([...selected, item])
 
     // Instantly clear search & refocus input for rapid selection
     setSearchTerm("")
@@ -64,11 +58,7 @@ export function PrioritySelector({
   const handleRemove = (index: number) => {
     const updated = [...selected]
     updated.splice(index, 1)
-    if (updated.length === 0 && defaultAnyOption) {
-      onChange(["ANY"])
-    } else {
-      onChange(updated)
-    }
+    onChange(updated)
   }
 
   const handleMoveUp = (index: number) => {

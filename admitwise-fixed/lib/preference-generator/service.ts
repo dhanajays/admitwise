@@ -116,9 +116,30 @@ export function normalizeBranchName(branchName: string): { groupId: string; disp
   }
 }
 
+export const CUSTOM_CITY_ORDER: string[] = [
+  "ANY",
+  "Pune",
+  "Mumbai",
+  "Nashik",
+  "Nagpur",
+  "Chhatrapati Sambhajinagar",
+  "Ahilyanagar",
+  "Amravati",
+  "Sangli",
+  "Satara",
+  "Kolhapur",
+  "Nanded",
+  "Solapur",
+  "Latur",
+  "Jalgaon",
+  "Raigad",
+  "Chandrapur",
+  "Yavatmal",
+]
+
 export class PreferenceGeneratorService {
   /**
-   * Fetches dataset metadata, distinct branches (alphabetically sorted), and distinct cities for a given CAP Round directly from the /dataset folder.
+   * Fetches dataset metadata, distinct branches (alphabetically sorted), and distinct cities (ordered by CUSTOM_CITY_ORDER) for a given CAP Round directly from the /dataset folder.
    */
   static async getDatasetOptions(round: string): Promise<DatasetOptions & { error?: string }> {
     try {
@@ -133,7 +154,7 @@ export class PreferenceGeneratorService {
         }
       }
 
-      // Extract unique branches and cities (alphabetically sorted)
+      // Extract unique branches and cities
       const branchesSet = new Set<string>()
       const citiesSet = new Set<string>()
 
@@ -143,7 +164,20 @@ export class PreferenceGeneratorService {
       }
 
       const branches = Array.from(branchesSet).sort((a, b) => a.localeCompare(b))
-      const cities = Array.from(citiesSet).sort((a, b) => a.localeCompare(b))
+
+      // Preserve CUSTOM_CITY_ORDER for cities dropdown
+      const cities: string[] = []
+      const datasetCities = Array.from(citiesSet)
+
+      for (const customCity of CUSTOM_CITY_ORDER) {
+        cities.push(customCity)
+      }
+
+      for (const dCity of datasetCities) {
+        if (!cities.some((c) => c.toLowerCase() === dCity.toLowerCase())) {
+          cities.push(dCity)
+        }
+      }
 
       return {
         branches,

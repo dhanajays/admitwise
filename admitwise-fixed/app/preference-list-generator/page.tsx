@@ -33,7 +33,7 @@ export default function PreferenceListGeneratorPage() {
   const [percentile, setPercentile] = useState<string>("")
   const [capRound, setCapRound] = useState("Round 1")
   const [preferredBranches, setPreferredBranches] = useState<string[]>([])
-  const [preferredCities, setPreferredCities] = useState<string[]>(["ANY"])
+  const [preferredCities, setPreferredCities] = useState<string[]>(["Pune", "Mumbai"])
 
   // Dataset Options (fetched dynamically)
   const [availableBranches, setAvailableBranches] = useState<string[]>([])
@@ -124,7 +124,7 @@ export default function PreferenceListGeneratorPage() {
           } else {
             setErrorMsg(null)
             setAvailableBranches(data.branches || [])
-            setAvailableCities(["ANY", ...(data.cities || [])])
+            setAvailableCities(data.cities || [])
             setDatasetInfo(data.datasetInfo || null)
             console.log("[Frontend fetchOptions] Received Branches:", (data.branches || []).length)
             console.log("[Frontend fetchOptions] Received Cities:", (data.cities || []).length)
