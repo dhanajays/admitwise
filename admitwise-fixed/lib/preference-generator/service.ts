@@ -101,40 +101,35 @@ export class PreferenceGeneratorService {
     const filteredRecords = Array.from(collegeBranchMap.values())
 
     // 3. Stage Ranges (Dream, Target, Safe)
-    const dreamMin = percentile
-    const dreamMax = 100
-
+    // Dream: > percentile and <= 100
+    // Target: <= percentile and >= percentile - 5
+    // Safe: < percentile - 5 and >= percentile - 15
     const targetMin = Math.max(0, percentile - 5)
-    const targetMax = percentile
-
     const safeMin = Math.max(0, percentile - 15)
-    const safeMax = Math.max(0, percentile - 5)
 
-    function getStageTag(cp: number): "Good" | "Moderate" | "Safe" | null {
-      if (cp >= dreamMin && cp <= dreamMax) return "Good" // Dream Stage
-      if (cp >= targetMin && cp < targetMax) return "Moderate" // Target Stage
-      if (cp >= safeMin && cp < safeMax) return "Safe" // Safe Stage
+    function getStageTag(cp: number): "Dream" | "Target" | "Safe" | null {
+      if (cp > percentile && cp <= 100) return "Dream"
+      if (cp <= percentile && cp >= targetMin) return "Target"
+      if (cp < targetMin && cp >= safeMin) return "Safe"
       return null
     }
 
     // Normalize user branch & city inputs
-    const normBranches = preferredBranches.map((b) => b.trim().toLowerCase())
+    const userBranches = preferredBranches.map((b) => b.trim())
     const isAnyCity =
       !preferredCities ||
       preferredCities.length === 0 ||
       preferredCities.some((c) => c.trim().toUpperCase() === "ANY")
 
-    const normCities = isAnyCity ? ["ANY"] : preferredCities.map((c) => c.trim().toLowerCase())
+    const userCities = isAnyCity ? ["ANY"] : preferredCities.map((c) => c.trim())
 
-    const stages: ("Good" | "Moderate" | "Safe")[] = ["Good", "Moderate", "Safe"]
+    const stages: ("Dream" | "Target" | "Safe")[] = ["Dream", "Target", "Safe"]
     const resultList: PreferenceResultItem[] = []
     const addedIds = new Set<string>()
 
-    // Helper for matching branch names flexibly
-    const isBranchMatch = (actualBranch: string, targetBranch: string) => {
-      const a = actualBranch.trim().toLowerCase()
-      const t = targetBranch.trim().toLowerCase()
-      return a === t || a.includes(t) || t.includes(a)
+    // Exact Branch Matching Rule: Only match exact branch name (case-insensitive & trimmed)
+    const isExactBranchMatch = (actualBranch: string, targetBranch: string) => {
+      return actualBranch.trim().toLowerCase() === targetBranch.trim().toLowerCase()
     }
 
     // 4. Algorithm Ordering Execution
@@ -142,11 +137,11 @@ export class PreferenceGeneratorService {
       if (isAnyCity) {
         // Case 1: "ANY" City Selected
         // Hierarchy: Stage -> Branch Priority -> Closing Percentile DESC
-        for (const branchPref of normBranches) {
+        for (const branchPref of userBranches) {
           const bucket = filteredRecords.filter((rec) => {
             const stageTag = getStageTag(rec.closingPercentile)
             if (stageTag !== stage) return false
-            if (!isBranchMatch(rec.branchName, branchPref)) return false
+            if (!isExactBranchMatch(rec.branchName, branchPref)) return false
             return !addedIds.has(rec.id)
           })
 
@@ -175,13 +170,13 @@ export class PreferenceGeneratorService {
       } else {
         // Case 2: Specific Cities Selected
         // Hierarchy: Stage -> City Priority -> Branch Priority -> Closing Percentile DESC
-        for (const cityPref of normCities) {
-          for (const branchPref of normBranches) {
+        for (const cityPref of userCities) {
+          for (const branchPref of userBranches) {
             const bucket = filteredRecords.filter((rec) => {
               const stageTag = getStageTag(rec.closingPercentile)
               if (stageTag !== stage) return false
-              if (rec.city.trim().toLowerCase() !== cityPref) return false
-              if (!isBranchMatch(rec.branchName, branchPref)) return false
+              if (rec.city.trim().toLowerCase() !== cityPref.toLowerCase()) return false
+              if (!isExactBranchMatch(rec.branchName, branchPref)) return false
               return !addedIds.has(rec.id)
             })
 

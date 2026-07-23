@@ -149,8 +149,8 @@ export async function generatePreferencePDF(
     didParseCell: function (data) {
       if (data.section === "body" && data.column.index === 6) {
         const val = String(data.cell.raw)
-        if (val === "Good") data.cell.styles.textColor = [34, 197, 94]
-        else if (val === "Moderate") data.cell.styles.textColor = [245, 158, 11]
+        if (val === "Dream" || val === "Good") data.cell.styles.textColor = [34, 197, 94]
+        else if (val === "Target" || val === "Moderate") data.cell.styles.textColor = [245, 158, 11]
         else data.cell.styles.textColor = [99, 102, 241]
       }
     },

@@ -17,7 +17,7 @@ export interface PreferenceResultItem {
   closingPercentile: number
   closingRank: number
   categoryUsed: string // "GOPENS" | "LOPENS"
-  stageTag: "Good" | "Moderate" | "Safe"
+  stageTag: "Dream" | "Target" | "Safe"
   priorityIndex: number
 }
 

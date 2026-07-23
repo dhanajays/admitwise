@@ -604,7 +604,7 @@ export default function PreferenceListGeneratorPage() {
                   Generated Preference List ({totalCount} Colleges)
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Ordered by Percentile Stage (Good → Moderate → Safe), City Priority, and Branch Priority.
+                  Ordered by Percentile Stage (Dream → Target → Safe), City Priority, and Branch Priority.
                 </p>
               </div>
 
@@ -675,9 +675,9 @@ export default function PreferenceListGeneratorPage() {
                     {/* Stage Tag */}
                     <span
                       className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border shadow-2xs ${
-                        item.stageTag === "Good"
+                        item.stageTag === "Dream" || item.stageTag === "Good"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : item.stageTag === "Moderate"
+                          : item.stageTag === "Target" || item.stageTag === "Moderate"
                           ? "bg-amber-50 text-amber-700 border-amber-200"
                           : "bg-indigo-50 text-indigo-700 border-indigo-200"
                       }`}
