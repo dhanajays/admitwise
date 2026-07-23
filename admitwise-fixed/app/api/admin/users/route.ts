@@ -267,48 +267,299 @@ export async function POST(req: Request) {
 
     // ── 5. Grant / Revoke Preference List Generator Access ───────────────────
     if (action === "grant_preference_access") {
-      const { round = "Round 1", accessStatus = "Active", percentile = 95 } = body
+      const {
+        round = "Round 1",
+        accessStatus = "Active",
+        accessType = "Preference List Generator (₹599)",
+        percentile = 95,
+        planType,
+      } = body
 
-      if (accessStatus === "No Access" || accessStatus === "Expired") {
-        await db.preferenceGeneratorPurchase.updateMany({
-          where: { userId, round },
-          data: { status: "Expired" },
+      console.log("========================================")
+      console.log("Preference Access Update Started")
+      console.log("========================================")
+      console.log("Student ID:", userId)
+      console.log("Target Round:", round)
+      console.log("Access Status:", accessStatus)
+      console.log("Access Type:", accessType)
+      console.log("Plan Type:", planType)
+      console.log("Percentile:", percentile)
+      console.log("Admin ID:", session.userId)
+
+      try {
+        const result = await db.$transaction(async (tx) => {
+          console.log("Loading student...")
+          const student = await tx.user.findUnique({
+            where: { id: userId },
+            select: { id: true, email: true, name: true, currentPlan: true },
+          })
+
+          if (!student) {
+            console.error("❌ Student not found with ID:", userId)
+            throw new Error(`Student with ID ${userId} not found.`)
+          }
+          console.log("✓ Student Found:", student.email)
+
+          const normType = (planType || accessType || "").toLowerCase()
+          const isRevoking = accessStatus === "No Access" || accessStatus === "Expired"
+
+          if (isRevoking) {
+            console.log("Revoking preference access for student...")
+            await tx.preferenceGeneratorPurchase.updateMany({
+              where: { userId, round },
+              data: { status: "Expired" },
+            })
+
+            console.log("✓ Preference access revoked.")
+            return {
+              message: `Preference list access revoked for ${round}`,
+              plan: student.currentPlan || "free",
+              allowedSavedPercentiles: 0,
+              allowedRounds: [],
+            }
+          }
+
+          // Case A: Grant ₹5000 Premium Plan
+          if (normType.includes("5000") || normType.includes("premium")) {
+            console.log("Granting ₹5000 Premium Plan (3 slots, All Rounds)...")
+
+            await tx.user.update({
+              where: { id: userId },
+              data: {
+                currentPlan: "premium",
+                profileLimit: 3,
+                paymentStatus: "paid",
+              },
+            })
+
+            await tx.subscription.updateMany({
+              where: { userId, status: "active" },
+              data: { status: "expired", expiresAt: new Date() },
+            })
+
+            const planExists = await tx.plan.findUnique({ where: { id: "premium" } })
+            if (planExists) {
+              await tx.subscription.create({
+                data: {
+                  userId,
+                  planId: "premium",
+                  maxProfiles: 3,
+                  trackerMaxProfiles: 3,
+                  status: "active",
+                },
+              })
+            }
+
+            const existingPurchase = await tx.preferenceGeneratorPurchase.findFirst({
+              where: { userId, round: "ALL" },
+            })
+
+            if (existingPurchase) {
+              await tx.preferenceGeneratorPurchase.update({
+                where: { id: existingPurchase.id },
+                data: {
+                  status: "Paid",
+                  savedPercentile: percentile,
+                  amount: 5000,
+                  paymentId: "admin_manual_premium",
+                },
+              })
+            } else {
+              await tx.preferenceGeneratorPurchase.create({
+                data: {
+                  userId,
+                  round: "ALL",
+                  savedPercentile: percentile,
+                  status: "Paid",
+                  amount: 5000,
+                  paymentId: "admin_manual_premium",
+                },
+              })
+            }
+
+            await tx.preferenceSavedPercentile.upsert({
+              where: {
+                userId_savedPercentile: { userId, savedPercentile: percentile },
+              },
+              create: { userId, savedPercentile: percentile },
+              update: {},
+            })
+
+            console.log("✓ Granted ₹5000 Premium Plan successfully.")
+            return {
+              message: "Granted ₹5000 Premium Plan (3 slots, All Rounds)",
+              plan: "premium",
+              allowedSavedPercentiles: 3,
+              allowedRounds: ["Round 1", "Round 2", "Round 3", "Round 4"],
+            }
+          }
+
+          // Case B: Grant ₹6000 Elite Plan
+          if (normType.includes("6000") || normType.includes("elite")) {
+            console.log("Granting ₹6000 Elite Plan (4 slots, All Rounds)...")
+
+            await tx.user.update({
+              where: { id: userId },
+              data: {
+                currentPlan: "elite",
+                profileLimit: 4,
+                paymentStatus: "paid",
+              },
+            })
+
+            await tx.subscription.updateMany({
+              where: { userId, status: "active" },
+              data: { status: "expired", expiresAt: new Date() },
+            })
+
+            const planExists = await tx.plan.findUnique({ where: { id: "elite" } })
+            if (planExists) {
+              await tx.subscription.create({
+                data: {
+                  userId,
+                  planId: "elite",
+                  maxProfiles: 4,
+                  trackerMaxProfiles: 4,
+                  status: "active",
+                },
+              })
+            }
+
+            const existingPurchase = await tx.preferenceGeneratorPurchase.findFirst({
+              where: { userId, round: "ALL" },
+            })
+
+            if (existingPurchase) {
+              await tx.preferenceGeneratorPurchase.update({
+                where: { id: existingPurchase.id },
+                data: {
+                  status: "Paid",
+                  savedPercentile: percentile,
+                  amount: 6000,
+                  paymentId: "admin_manual_elite",
+                },
+              })
+            } else {
+              await tx.preferenceGeneratorPurchase.create({
+                data: {
+                  userId,
+                  round: "ALL",
+                  savedPercentile: percentile,
+                  status: "Paid",
+                  amount: 6000,
+                  paymentId: "admin_manual_elite",
+                },
+              })
+            }
+
+            await tx.preferenceSavedPercentile.upsert({
+              where: {
+                userId_savedPercentile: { userId, savedPercentile: percentile },
+              },
+              create: { userId, savedPercentile: percentile },
+              update: {},
+            })
+
+            console.log("✓ Granted ₹6000 Elite Plan successfully.")
+            return {
+              message: "Granted ₹6000 Elite Plan (4 slots, All Rounds)",
+              plan: "elite",
+              allowedSavedPercentiles: 4,
+              allowedRounds: ["Round 1", "Round 2", "Round 3", "Round 4"],
+            }
+          }
+
+          // Case C: Grant ₹599 Preference List Access for a specific round
+          console.log(`Checking existing purchase for user ${userId} and round ${round}...`)
+          const existingPurchase = await tx.preferenceGeneratorPurchase.findFirst({
+            where: { userId, round },
+          })
+
+          if (existingPurchase) {
+            console.log("Updating existing purchase record ID:", existingPurchase.id)
+            await tx.preferenceGeneratorPurchase.update({
+              where: { id: existingPurchase.id },
+              data: {
+                status: "Paid",
+                savedPercentile: percentile,
+                amount: 599,
+                paymentId: "admin_manual",
+              },
+            })
+          } else {
+            console.log("Creating new purchase record...")
+            await tx.preferenceGeneratorPurchase.create({
+              data: {
+                userId,
+                round,
+                savedPercentile: percentile,
+                status: "Paid",
+                amount: 599,
+                paymentId: "admin_manual",
+              },
+            })
+          }
+
+          console.log("Updating saved percentile profile...")
+          await tx.preferenceSavedPercentile.upsert({
+            where: {
+              userId_savedPercentile: { userId, savedPercentile: percentile },
+            },
+            create: { userId, savedPercentile: percentile },
+            update: {},
+          })
+
+          console.log("✓ Granted Preference List access for", round)
+          return {
+            message: `Granted Preference List access for ${round}`,
+            plan: student.currentPlan || "free",
+            allowedSavedPercentiles: 1,
+            allowedRounds: [round],
+          }
         })
-        return NextResponse.json({ success: true, message: `Preference list access revoked for ${round}` })
-      }
 
-      await db.preferenceGeneratorPurchase.upsert({
-        where: {
-          userId_round: {
-            userId,
-            round,
+        try {
+          await db.activityLog.create({
+            data: {
+              userId: session.userId,
+              action: "ADMIN_PREFERENCE_GRANT",
+              details: `Granted Preference List access to user ID ${userId} (${result.plan})`,
+            },
+          })
+        } catch (e) {
+          console.warn("Could not record activity log:", e)
+        }
+
+        console.log("========================================")
+        console.log("Preference Access Update Completed Successfully")
+        console.log("========================================")
+
+        return NextResponse.json({
+          success: true,
+          message: result.message,
+          plan: result.plan,
+          allowedSavedPercentiles: result.allowedSavedPercentiles,
+          allowedRounds: result.allowedRounds,
+          unlimitedRegeneration: true,
+        })
+      } catch (err: any) {
+        console.error("========================================")
+        console.error("❌ Preference Access Update Failed")
+        console.error("Error Name:", err?.name)
+        console.error("Error Message:", err?.message)
+        console.error("Prisma Code:", err?.code)
+        console.error("Stack Trace:", err?.stack)
+        console.error("========================================")
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: err?.message || "Failed to update Preference Generator access.",
+            code: err?.code || "UNKNOWN_ERROR",
           },
-        },
-        update: {
-          status: "Paid",
-          savedPercentile: percentile,
-          amount: 599,
-          paymentId: "admin_manual",
-        },
-        create: {
-          userId,
-          round,
-          savedPercentile: percentile,
-          status: "Paid",
-          amount: 599,
-          paymentId: "admin_manual",
-        },
-      })
-
-      await db.activityLog.create({
-        data: {
-          userId: session.userId,
-          action: "ADMIN_PREFERENCE_GRANT",
-          details: `Manually granted Preference List Generator access to user ${user.email} for ${round}`,
-        },
-      })
-
-      return NextResponse.json({ success: true, message: `Granted Preference List access for ${round}` })
+          { status: 400 }
+        )
+      }
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })

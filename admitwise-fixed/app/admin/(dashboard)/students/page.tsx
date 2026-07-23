@@ -122,6 +122,7 @@ export default function StudentManagerPage() {
       } else if (modalType === "preference_grant") {
         body.action = "grant_preference_access"
         body.round = prefRound
+        body.accessType = prefAccessType
         body.accessStatus = prefStatus === "Active" && prefAccessType !== "No Access" ? "Active" : "No Access"
         body.percentile = 95
       } else if (modalType === "delete") {
@@ -165,7 +166,7 @@ export default function StudentManagerPage() {
         setNewPassword("")
       } else {
         const data = await res.json()
-        alert(data.error || "Action failed")
+        alert(`Failed to complete action.\nReason: ${data.error || "Unknown error"}`)
       }
     } catch (err) {
       console.error(err)
