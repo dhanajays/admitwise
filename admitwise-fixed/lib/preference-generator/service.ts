@@ -234,46 +234,75 @@ export class PreferenceGeneratorService {
       return { items: [], error: res.error }
     }
 
-    // 2. Apply Category, Gender, and PwD filters before passing into the ranking engine
+    // 2. City Filter Setup (Cities ONLY filter dataset, they do NOT order results)
+    const isAnyCity =
+      !preferredCities ||
+      preferredCities.length === 0 ||
+      preferredCities.some((c) => c.trim().toUpperCase() === "ANY")
+
+    const selectedCitiesSet = new Set(preferredCities.map((c) => c.trim().toLowerCase()))
+
+    // 3. Apply City, Category, Gender, and PwD filters upfront
     const rawCutoffs = res.records.filter((r) => {
       // Must have valid closing percentile
       if (r.closingPercentile < 0 || r.closingPercentile > 100) return false
 
-      // --- Category Filter ---
-      // Match candidate's own category rows, plus OPEN rows (all candidates are eligible for OPEN seats)
-      const rCat = r.category.trim().toUpperCase()
-      const catMatch = rCat === reqCategory || (reqCategory !== "OPEN" && rCat === "OPEN")
-      if (!catMatch) return false
+      // City Filter (WHERE city IN selectedCities)
+      if (!isAnyCity && !selectedCitiesSet.has(r.city.trim().toLowerCase())) {
+        return false
+      }
 
-      // --- Gender Filter ---
-      // Dataset values: "Not Specified" (gender-neutral/open), "Female" (female-only)
-      // Male   → eligible for "Not Specified" seats only
-      // Female → eligible for "Female" and "Not Specified" seats
+      // PwD Filter
+      const rDis = r.disability.trim().toLowerCase()
+      const rawCode = r.categoryCodeRaw.toUpperCase()
+      if (reqPwd === "yes") {
+        if (rDis !== "yes" && !rawCode.startsWith("PWD")) return false
+      } else {
+        if (rDis === "yes" || rawCode.startsWith("PWD")) return false
+      }
+
+      // Gender Filter for Male candidates
       const rGen = r.gender.trim().toLowerCase()
       if (reqGender === "male") {
-        if (rGen !== "not specified" && rGen !== "male" && rGen !== "") return false
+        if (rGen === "female" || (rawCode.startsWith("L") && !rawCode.startsWith("LOG"))) {
+          return false
+        }
       }
-      // Female candidates: all genders pass (Female + Not Specified)
 
-      // --- PwD Filter ---
-      // No  → only non-PwD seats
-      // Yes → PwD and non-PwD seats (PwD candidate eligible for both)
-      const rDis = r.disability.trim().toLowerCase()
-      if (reqPwd === "no") {
-        if (rDis !== "no" && rDis !== "") return false
-      }
-      // Yes: both pass
+      // Category Filter (Candidate category OR OPEN fallback)
+      const rCat = r.category.trim().toUpperCase()
+      const isCandidateCat =
+        rCat === reqCategory ||
+        (reqCategory === "NT-A" && (rCat === "NT-A" || rawCode.includes("VJ") || rawCode.includes("NT1"))) ||
+        (reqCategory === "NT-B" && (rCat === "NT-B" || rawCode.includes("NT1") || rawCode.includes("NT2"))) ||
+        (reqCategory === "NT-C" && (rCat === "NT-C" || rawCode.includes("NT2") || rawCode.includes("NT3"))) ||
+        (reqCategory === "NT-D" && (rCat === "NT-D" || rawCode.includes("NT3") || rawCode.includes("VJ"))) ||
+        (reqCategory === "SBC" && (rCat === "SBC" || rCat === "OBC"))
 
-      return true
+      const isOpen = rCat === "OPEN" || rawCode.startsWith("GOPEN") || rawCode.startsWith("LOPEN")
+
+      return isCandidateCat || isOpen
     })
 
     if (!rawCutoffs || rawCutoffs.length === 0) {
       return { items: [] }
     }
 
-    // For each college_code + branch_code, keep the candidate's specific category row first.
-    // If multiple rows exist for the same college+branch, prefer the candidate's exact category
-    // over a generic OPEN row, and break ties by higher closingPercentile.
+    // Deduplication per College Code + Branch Code:
+    // Prefer candidate's exact category row over OPEN fallback, and break ties by higher closingPercentile.
+    function getCategoryScore(item: typeof res.records[0]): number {
+      const cat = item.category.trim().toUpperCase()
+      const raw = item.categoryCodeRaw.trim().toUpperCase()
+      let score = 0
+      if (cat === reqCategory) score += 100
+      else if (reqCategory !== "OPEN" && cat === "OPEN") score += 50
+
+      if (reqGender === "female" && (item.gender.trim().toLowerCase() === "female" || raw.startsWith("L"))) {
+        score += 10
+      }
+      return score
+    }
+
     const collegeBranchMap = new Map<string, typeof rawCutoffs[0]>()
 
     for (const item of rawCutoffs) {
@@ -282,14 +311,11 @@ export class PreferenceGeneratorService {
       if (!existing) {
         collegeBranchMap.set(key, item)
       } else {
-        const existingCat = existing.category.trim().toUpperCase()
-        const itemCat = item.category.trim().toUpperCase()
-        // Prefer candidate's exact category over OPEN fallback
-        const itemIsExact = itemCat === reqCategory
-        const existingIsExact = existingCat === reqCategory
-        if (itemIsExact && !existingIsExact) {
+        const itemScore = getCategoryScore(item)
+        const existingScore = getCategoryScore(existing)
+        if (itemScore > existingScore) {
           collegeBranchMap.set(key, item)
-        } else if (itemIsExact === existingIsExact && item.closingPercentile > existing.closingPercentile) {
+        } else if (itemScore === existingScore && item.closingPercentile > existing.closingPercentile) {
           collegeBranchMap.set(key, item)
         }
       }
@@ -297,7 +323,7 @@ export class PreferenceGeneratorService {
 
     const filteredRecords = Array.from(collegeBranchMap.values())
 
-    // 3. Stage Ranges (Dream, Target, Safe)
+    // 4. Stage Ranges (Dream, Target, Safe)
     const targetMin = Math.max(0, percentile - 5)
     const safeMin = Math.max(0, percentile - 15)
 
@@ -308,7 +334,7 @@ export class PreferenceGeneratorService {
       return null
     }
 
-    // 4. Normalize & Deduplicate Student Branch Priorities into Branch Groups
+    // 5. Normalize & Deduplicate Student Branch Priorities into Branch Groups
     const selectedGroupMap = new Map<string, { groupId: string; displayName: string; matchedAliases: string[] }>()
     const orderedBranchGroups: { groupId: string; displayName: string; matchedAliases: string[] }[] = []
 
@@ -320,98 +346,46 @@ export class PreferenceGeneratorService {
       }
     }
 
-    // Normalize City Inputs
-    const isAnyCity =
-      !preferredCities ||
-      preferredCities.length === 0 ||
-      preferredCities.some((c) => c.trim().toUpperCase() === "ANY")
-
-    const userCities = isAnyCity ? ["ANY"] : preferredCities.map((c) => c.trim())
-
     const stages: ("Dream" | "Target" | "Safe")[] = ["Dream", "Target", "Safe"]
     const resultList: PreferenceResultItem[] = []
     const addedKeys = new Set<string>()
 
-    // 5. Algorithm Execution with Branch Group Aliases
+    // 6. Ordering Hierarchy: Stage -> Branch Group Priority -> Closing Percentile DESC
     for (const stage of stages) {
-      if (isAnyCity) {
-        // Hierarchy: Stage -> Branch Group Priority -> Closing Percentile DESC
-        for (const group of orderedBranchGroups) {
-          const aliasNormSet = new Set(group.matchedAliases.map((a) => a.trim().toLowerCase()))
+      for (const group of orderedBranchGroups) {
+        const aliasNormSet = new Set(group.matchedAliases.map((a) => a.trim().toLowerCase()))
 
-          const bucket = filteredRecords.filter((rec) => {
-            const stageTag = getStageTag(rec.closingPercentile)
-            if (stageTag !== stage) return false
-            if (!aliasNormSet.has(rec.branchName.trim().toLowerCase())) return false
+        const bucket = filteredRecords.filter((rec) => {
+          const stageTag = getStageTag(rec.closingPercentile)
+          if (stageTag !== stage) return false
+          if (!aliasNormSet.has(rec.branchName.trim().toLowerCase())) return false
 
-            const dedupeKey = `${stage}_${rec.collegeCode}_${group.groupId}`
-            return !addedKeys.has(dedupeKey)
+          const dedupeKey = `${stage}_${rec.collegeCode}_${group.groupId}`
+          return !addedKeys.has(dedupeKey)
+        })
+
+        // Sort bucket by closingPercentile DESCENDING
+        bucket.sort((a, b) => b.closingPercentile - a.closingPercentile)
+
+        for (const item of bucket) {
+          const dedupeKey = `${stage}_${item.collegeCode}_${group.groupId}`
+          addedKeys.add(dedupeKey)
+
+          resultList.push({
+            id: item.id,
+            collegeCode: item.collegeCode,
+            collegeName: item.collegeName,
+            branchCode: item.branchCode,
+            branchName: item.branchName,
+            city: item.city,
+            status: item.status,
+            homeUniversity: item.homeUniversity,
+            closingPercentile: item.closingPercentile,
+            closingRank: item.closingRank,
+            categoryUsed: item.categoryCodeRaw,
+            stageTag: stage,
+            priorityIndex: resultList.length + 1,
           })
-
-          // Sort bucket by closingPercentile DESC
-          bucket.sort((a, b) => b.closingPercentile - a.closingPercentile)
-
-          for (const item of bucket) {
-            const dedupeKey = `${stage}_${item.collegeCode}_${group.groupId}`
-            addedKeys.add(dedupeKey)
-
-            resultList.push({
-              id: item.id,
-              collegeCode: item.collegeCode,
-              collegeName: item.collegeName,
-              branchCode: item.branchCode,
-              branchName: item.branchName,
-              city: item.city,
-              status: item.status,
-              homeUniversity: item.homeUniversity,
-              closingPercentile: item.closingPercentile,
-              closingRank: item.closingRank,
-              categoryUsed: item.categoryCodeRaw,
-              stageTag: stage,
-              priorityIndex: resultList.length + 1,
-            })
-          }
-        }
-      } else {
-        // Hierarchy: Stage -> City Priority -> Branch Group Priority -> Closing Percentile DESC
-        for (const cityPref of userCities) {
-          for (const group of orderedBranchGroups) {
-            const aliasNormSet = new Set(group.matchedAliases.map((a) => a.trim().toLowerCase()))
-
-            const bucket = filteredRecords.filter((rec) => {
-              const stageTag = getStageTag(rec.closingPercentile)
-              if (stageTag !== stage) return false
-              if (rec.city.trim().toLowerCase() !== cityPref.toLowerCase()) return false
-              if (!aliasNormSet.has(rec.branchName.trim().toLowerCase())) return false
-
-              const dedupeKey = `${stage}_${rec.collegeCode}_${group.groupId}`
-              return !addedKeys.has(dedupeKey)
-            })
-
-            // Sort bucket by closingPercentile DESC
-            bucket.sort((a, b) => b.closingPercentile - a.closingPercentile)
-
-            for (const item of bucket) {
-              const dedupeKey = `${stage}_${item.collegeCode}_${group.groupId}`
-              addedKeys.add(dedupeKey)
-
-              resultList.push({
-                id: item.id,
-                collegeCode: item.collegeCode,
-                collegeName: item.collegeName,
-                branchCode: item.branchCode,
-                branchName: item.branchName,
-                city: item.city,
-                status: item.status,
-                homeUniversity: item.homeUniversity,
-                closingPercentile: item.closingPercentile,
-                closingRank: item.closingRank,
-                categoryUsed: item.categoryCodeRaw,
-                stageTag: stage,
-                priorityIndex: resultList.length + 1,
-              })
-            }
-          }
         }
       }
     }
