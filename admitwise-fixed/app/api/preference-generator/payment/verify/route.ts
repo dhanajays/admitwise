@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next"
 import { authOptions, CustomSession } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { verifyRazorpaySignature } from "@/lib/razorpay"
+import { getPreferenceListEntitlement } from "@/lib/payments"
 import { z } from "zod"
 
 const verifySchema = z.object({
@@ -44,20 +45,37 @@ export async function POST(req: Request) {
 
     if (db && (db as any).preferenceGeneratorPurchase) {
       try {
-        const purchase = await db.preferenceGeneratorPurchase.create({
-          data: {
-            userId,
-            round: round || "Round 1",
-            savedPercentile: percentile,
-            paymentId: razorpay_payment_id,
-            status: "Paid",
-            amount: 599,
-          },
+        const targetRound = round || "Round 1"
+        const existingPurchase = await db.preferenceGeneratorPurchase.findFirst({
+          where: { userId, round: targetRound },
         })
-        purchaseId = purchase.id
-        purchasePercentile = purchase.savedPercentile || percentile
+
+        if (existingPurchase) {
+          await db.preferenceGeneratorPurchase.update({
+            where: { id: existingPurchase.id },
+            data: {
+              status: "Paid",
+              paymentId: razorpay_payment_id,
+              savedPercentile: percentile,
+              amount: 599,
+            },
+          })
+          purchaseId = existingPurchase.id
+        } else {
+          const purchase = await db.preferenceGeneratorPurchase.create({
+            data: {
+              userId,
+              round: targetRound,
+              savedPercentile: percentile,
+              paymentId: razorpay_payment_id,
+              status: "Paid",
+              amount: 599,
+            },
+          })
+          purchaseId = purchase.id
+        }
       } catch (err) {
-        console.error("Error creating preference generator purchase:", err)
+        console.error("Error updating preference generator purchase:", err)
       }
     }
 
@@ -97,13 +115,18 @@ export async function POST(req: Request) {
       }
     }
 
+    // Re-evaluate entitlement via central single source of truth
+    const entitlement = await getPreferenceListEntitlement(userId, round, percentile)
+
     return NextResponse.json({
       success: true,
+      message: "Payment verified successfully",
       purchase: {
         id: purchaseId,
         round,
-        savedPercentile: purchasePercentile,
+        savedPercentile: percentile,
       },
+      entitlement,
     })
   } catch (error: any) {
     console.error("Error in /api/preference-generator/payment/verify:", error)

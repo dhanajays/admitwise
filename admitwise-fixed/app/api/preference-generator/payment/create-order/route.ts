@@ -5,6 +5,8 @@ import { db } from "@/lib/db"
 import { createRazorpayOrder, getRazorpayKeyId } from "@/lib/razorpay"
 import { z } from "zod"
 
+import { getPreferenceListEntitlement } from "@/lib/payments"
+
 const createOrderSchema = z.object({
   round: z.string(),
   percentile: z.number().min(0).max(100),
@@ -27,55 +29,9 @@ export async function POST(req: Request) {
     const userId = session.user.id
     const amount = 599 // ₹599
 
-    // Check if user owns Premium (₹5000) or Elite (₹6000) plan which includes full Preference List Generator access
-    const userRecord = await db.user.findUnique({
-      where: { id: userId },
-      select: { currentPlan: true },
-    })
-
-    if (userRecord && (userRecord.currentPlan === "premium" || userRecord.currentPlan === "elite")) {
-      return NextResponse.json(
-        { error: `Preference List Generator is already included in your ${userRecord.currentPlan === "premium" ? "₹5000 Premium" : "₹6000 Elite"} plan!` },
-        { status: 400 }
-      )
-    }
-
-    // Safely check if already purchased (missing purchase is NOT an error)
-    let existing = null
-    if (db && (db as any).preferenceGeneratorPurchase) {
-      try {
-        existing = await db.preferenceGeneratorPurchase.findFirst({
-          where: {
-            userId,
-            round,
-            status: "Paid",
-          },
-        })
-      } catch (err) {
-        console.warn("No existing purchase found or purchase check skipped:", err)
-      }
-    }
-
-    // Check if percentile is already saved
-    let isPercentileSaved = false
-    if (db && (db as any).preferenceSavedPercentile) {
-      try {
-        const saved = await db.preferenceSavedPercentile.findFirst({
-          where: {
-            userId,
-            savedPercentile: {
-              gte: percentile - 0.01,
-              lte: percentile + 0.01,
-            },
-          },
-        })
-        if (saved) isPercentileSaved = true
-      } catch (err) {
-        console.warn("Saved percentile check failed:", err)
-      }
-    }
-
-    if (existing && isPercentileSaved) {
+    // Check entitlement via single source of truth helper
+    const entitlement = await getPreferenceListEntitlement(userId, round, percentile)
+    if (entitlement.mode === "full") {
       return NextResponse.json(
         { error: `You have already unlocked ${round} for percentile ${percentile}%.` },
         { status: 400 }

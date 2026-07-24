@@ -726,9 +726,27 @@ export default function PreferenceListGeneratorPage() {
           </div>
 
           {errorMsg && (
-            <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{errorMsg}</span>
+            <div className={`rounded-xl border p-4 text-xs ${mode === "blocked" ? "bg-amber-50 border-amber-300 text-amber-900 shadow-sm space-y-3" : "bg-red-50 border-red-200 text-red-700 flex items-center gap-2"}`}>
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                <span className="font-semibold">{errorMsg}</span>
+              </div>
+              {mode === "blocked" && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleUnlockPayment}
+                    disabled={purchasing}
+                    className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-5 py-2 text-xs shadow-md transition-all cursor-pointer flex items-center gap-2"
+                  >
+                    {purchasing ? (
+                      <><div className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Processing Payment...</>
+                    ) : (
+                      <>Purchase +1 Saved Percentile (₹599)</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -875,81 +893,91 @@ export default function PreferenceListGeneratorPage() {
                 </motion.div>
               ))}
 
-              {/* Unlock Card — shown after 5th college when mode is preview */}
-              {mode === "preview" && totalCount > 5 && (
-                <div className="mt-6 rounded-2xl border border-blue-200 bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 shadow-2xl overflow-hidden">
-                  {/* Blurred ghost rows representing locked colleges */}
-                  <div className="space-y-2.5 p-4 blur-md opacity-25 pointer-events-none select-none">
-                    {[6, 7, 8].map((dummyIdx) => (
-                      <div key={dummyIdx} className="flex items-center gap-3 rounded-xl bg-white/10 p-3">
-                        <span className="h-7 w-7 rounded-lg bg-white/20 shrink-0" />
-                        <div className="space-y-1.5 flex-1">
-                          <div className="h-2.5 w-2/3 bg-white/20 rounded" />
-                          <div className="h-2 w-1/3 bg-white/15 rounded" />
+              {/* Unlock Card & Ghost Placeholder Rows — shown after 5th college in Preview Mode */}
+              {mode === "preview" && (
+                <div className="space-y-3 mt-3 relative">
+                  {/* 6 Blurred Ghost Placeholder Card Rows (representing remaining colleges) */}
+                  {[6, 7, 8, 9, 10, 11].map((ghostIdx) => (
+                    <div
+                      key={`ghost-${ghostIdx}`}
+                      className="glass-card rounded-xl p-4 bg-slate-100/70 border border-slate-200/80 shadow-2xs blur-[4px] opacity-35 select-none pointer-events-none flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-400 text-xs font-bold text-white">
+                          #{ghostIdx}
+                        </span>
+                        <div className="space-y-1.5 flex-1 min-w-[200px]">
+                          <div className="h-3.5 w-48 bg-slate-300 rounded" />
+                          <div className="h-2.5 w-32 bg-slate-200 rounded" />
                         </div>
-                        <div className="h-5 w-14 rounded-full bg-white/15" />
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex items-center gap-3">
+                        <div className="h-6 w-20 rounded-full bg-slate-200" />
+                        <div className="h-6 w-16 rounded bg-slate-200" />
+                      </div>
+                    </div>
+                  ))}
 
                   {/* Premium Purchase Section */}
-                  <div className="flex flex-col items-center justify-center gap-5 p-8 text-center -mt-28 relative z-10">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-500/20 border border-blue-400/30 shadow-lg">
-                      <Lock className="h-6 w-6 text-blue-300" />
-                    </div>
+                  <div className="mt-6 rounded-2xl border border-blue-200 bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 shadow-2xl overflow-hidden">
+                    <div className="flex flex-col items-center justify-center gap-5 p-8 text-center relative z-10">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-500/20 border border-blue-400/30 shadow-lg">
+                        <Lock className="h-6 w-6 text-blue-300" />
+                      </div>
 
-                    <div className="space-y-2 max-w-lg">
-                      <h3 className="text-xl sm:text-2xl font-extrabold text-white">
-                        🔒 Unlock Complete Preference List
-                      </h3>
-                      <p className="text-sm text-blue-200">
-                        You are currently viewing a preview for <strong>{capRound}</strong>.
-                        {slotStats.allowedRounds && slotStats.allowedRounds.length > 0 && (
-                          <span className="block mt-1 text-xs text-amber-300 font-semibold">
-                            (Your ₹599 purchase is currently valid for {slotStats.allowedRounds.join(", ")})
-                          </span>
-                        )}
-                      </p>
-                    </div>
+                      <div className="space-y-2 max-w-lg">
+                        <h3 className="text-xl sm:text-2xl font-extrabold text-white">
+                          🔒 Unlock Complete Preference List
+                        </h3>
+                        <p className="text-sm text-blue-200">
+                          You are currently viewing a preview showing 5 of {totalCount} Colleges for <strong>{capRound}</strong>.
+                          {slotStats.allowedRounds && slotStats.allowedRounds.length > 0 && (
+                            <span className="block mt-1 text-xs text-amber-300 font-semibold">
+                              (Your ₹599 purchase is currently valid for {slotStats.allowedRounds.join(", ")})
+                            </span>
+                          )}
+                        </p>
+                      </div>
 
-                    {/* Feature Checklist */}
-                    <div className="rounded-xl bg-white/5 border border-white/10 p-4 text-xs text-left w-full max-w-md space-y-2">
-                      <p className="text-[11px] font-bold text-blue-300 uppercase tracking-wider mb-2">
-                        Purchase ₹599 for {capRound} to unlock:
-                      </p>
-                      <div className="flex items-center gap-2 text-white font-medium">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> Complete Preference List (All {totalCount} Colleges)
+                      {/* Feature Checklist */}
+                      <div className="rounded-xl bg-white/5 border border-white/10 p-4 text-xs text-left w-full max-w-md space-y-2">
+                        <p className="text-[11px] font-bold text-blue-300 uppercase tracking-wider mb-2">
+                          Purchase ₹599 for {capRound} to unlock:
+                        </p>
+                        <div className="flex items-center gap-2 text-white font-medium">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> Complete Preference List (All {totalCount} Colleges)
+                        </div>
+                        <div className="flex items-center gap-2 text-white font-medium">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> PDF Download for {capRound}
+                        </div>
+                        <div className="flex items-center gap-2 text-white font-medium">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> Unlimited regeneration for this round
+                        </div>
+                        <div className="flex items-center gap-2 text-white font-medium">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> Access using your saved or a new percentile
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-white font-medium">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> PDF Download for {capRound}
-                      </div>
-                      <div className="flex items-center gap-2 text-white font-medium">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> Unlimited regeneration for this round
-                      </div>
-                      <div className="flex items-center gap-2 text-white font-medium">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" /> Access using your saved or a new percentile
-                      </div>
-                    </div>
 
-                    {/* Price & CTA Button */}
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-black text-white">₹599</span>
-                        <span className="text-sm text-blue-300">one-time for {capRound}</span>
+                      {/* Price & CTA Button */}
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-black text-white">₹599</span>
+                          <span className="text-sm text-blue-300">one-time for {capRound}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleUnlockPayment}
+                          disabled={purchasing}
+                          className="rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-10 py-3.5 text-sm font-extrabold text-white shadow-xl shadow-blue-500/30 transition-all hover:scale-105 hover:shadow-blue-500/40 active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                        >
+                          {purchasing ? (
+                            <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Processing...</>
+                          ) : (
+                            <>Purchase ₹599 for {capRound}</>
+                          )}
+                        </button>
+                        <p className="text-[10px] text-slate-400">Secure payment via Razorpay · Instant Unlock</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleUnlockPayment}
-                        disabled={purchasing}
-                        className="rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-10 py-3.5 text-sm font-extrabold text-white shadow-xl shadow-blue-500/30 transition-all hover:scale-105 hover:shadow-blue-500/40 active:scale-95 cursor-pointer disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {purchasing ? (
-                          <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Processing...</>
-                        ) : (
-                          <>Purchase ₹599 for {capRound}</>
-                        )}
-                      </button>
-                      <p className="text-[10px] text-slate-400">Secure payment via Razorpay · Instant Unlock</p>
                     </div>
                   </div>
                 </div>
