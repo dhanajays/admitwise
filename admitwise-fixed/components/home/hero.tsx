@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { ArrowRight, BarChart3, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react"
+import { ArrowRight, BarChart3, CheckCircle2, ShieldCheck, Sparkles, Zap } from "lucide-react"
 
 export function Hero() {
   // Container stagger options
@@ -73,26 +73,45 @@ export function Hero() {
           {/* CTA Buttons */}
           <motion.div 
             variants={itemVariants}
-            className="mt-8 flex flex-col sm:flex-row gap-4 w-full sm:w-auto"
+            className="mt-8 flex flex-col gap-3.5 w-full sm:max-w-xl"
           >
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }} className="w-full sm:w-auto">
+            {/* Primary Hero CTA Button — Get Your Preference List */}
+            <motion.div 
+              whileHover={{ scale: 1.02 }} 
+              whileTap={{ scale: 0.98 }} 
+              className="w-full"
+            >
               <Link
-                href="/predictor"
-                className="btn-premium flex items-center justify-center gap-2 text-sm font-semibold group shadow-indigo-500/10 w-full sm:w-auto"
+                href="/preference-list-generator"
+                className="flex items-center justify-center gap-3 h-14 sm:h-[60px] px-8 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-extrabold text-base sm:text-lg shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/35 transition-all duration-300 group w-full cursor-pointer"
               >
-                Predict Your College
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                <Zap className="h-5 w-5 text-amber-300 fill-amber-300 animate-bounce shrink-0" />
+                <span>Get Your Preference List</span>
+                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1.5 shrink-0" />
               </Link>
             </motion.div>
-            
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }} className="w-full sm:w-auto">
-              <Link
-                href="/contact"
-                className="btn-premium-outline flex items-center justify-center gap-2 text-sm font-semibold text-slate-800 hover:text-slate-900 border-slate-205 bg-white w-full sm:w-auto shadow-sm"
-              >
-                Book 1:1 Counselling
-              </Link>
-            </motion.div>
+
+            {/* Secondary Buttons Row */}
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full sm:flex-1">
+                <Link
+                  href="/predictor"
+                  className="btn-premium flex items-center justify-center gap-2 text-sm font-semibold group shadow-indigo-500/10 w-full h-12"
+                >
+                  Predict Your College
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </Link>
+              </motion.div>
+              
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full sm:flex-1">
+                <Link
+                  href="/contact"
+                  className="btn-premium-outline flex items-center justify-center gap-2 text-sm font-semibold text-slate-800 hover:text-slate-900 border-slate-200 bg-white w-full h-12 shadow-sm"
+                >
+                  Book 1:1 Counselling
+                </Link>
+              </motion.div>
+            </div>
           </motion.div>
 
           {/* Footer bullet lists */}
