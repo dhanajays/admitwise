@@ -2,51 +2,30 @@ import Razorpay from "razorpay"
 import crypto from "crypto"
 
 export function getRazorpayCredentialsForProduct(productType?: string | null) {
-  const pType = (productType || "").toLowerCase()
-  const isPreferenceList =
-    pType.includes("preference") ||
-    pType.includes("pref") ||
-    pType.includes("599") ||
-    pType === "addon_pref"
-
-  if (isPreferenceList) {
-    const keyId =
-      process.env.RAZORPAY_TEST_KEY_ID ||
-      process.env.NEXT_PUBLIC_RAZORPAY_TEST_KEY_ID
-
-    const keySecret = process.env.RAZORPAY_TEST_KEY_SECRET
-
-    if (!keyId || !keySecret) {
-      console.error("❌ Missing RAZORPAY_TEST_KEY_ID or RAZORPAY_TEST_KEY_SECRET in server environment variables!")
-      throw new Error("Missing RAZORPAY_TEST_KEY_ID or RAZORPAY_TEST_KEY_SECRET in server environment variables")
-    }
-
-    return {
-      keyId,
-      keySecret,
-      isTest: true,
-    }
-  }
-
-  // Live credentials for Premium (₹5000) & Elite (₹6000)
+  // Use LIVE credentials for all products (including ₹599 Preference List, ₹5000 Premium, ₹6000 Elite)
   const keyId =
     process.env.RAZORPAY_LIVE_KEY_ID ||
     process.env.RAZORPAY_KEY_ID ||
-    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+    process.env.RAZORPAY_TEST_KEY_ID ||
+    process.env.NEXT_PUBLIC_RAZORPAY_TEST_KEY_ID
 
   const keySecret =
     process.env.RAZORPAY_LIVE_KEY_SECRET ||
-    process.env.RAZORPAY_KEY_SECRET
+    process.env.RAZORPAY_KEY_SECRET ||
+    process.env.RAZORPAY_TEST_KEY_SECRET
 
   if (!keyId || !keySecret) {
-    console.error("❌ Missing RAZORPAY_LIVE_KEY_ID or RAZORPAY_LIVE_KEY_SECRET in server environment variables!")
-    throw new Error("Missing RAZORPAY_LIVE_KEY_ID or RAZORPAY_LIVE_KEY_SECRET in server environment variables")
+    console.error("❌ Missing Razorpay LIVE credentials (RAZORPAY_LIVE_KEY_ID / RAZORPAY_LIVE_KEY_SECRET) in server environment variables!")
+    throw new Error("Missing Razorpay LIVE credentials in server environment variables")
   }
+
+  const isTest = keyId.startsWith("rzp_test_")
 
   return {
     keyId,
     keySecret,
-    isTest: false,
+    isTest,
   }
 }
 
