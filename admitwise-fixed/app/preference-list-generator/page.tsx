@@ -394,8 +394,10 @@ export default function PreferenceListGeneratorPage() {
           }),
         })
 
-        const onPaymentSuccess = async () => {
-          setIsPaid(true)
+        const onPaymentSuccess = async (verifyData?: any) => {
+          if (verifyData?.entitlement?.mode) {
+            setMode(verifyData.entitlement.mode)
+          }
           setSavedPercentile(currentPerc)
           await checkPurchase()
           await handleGenerate(currentPerc)
@@ -403,7 +405,8 @@ export default function PreferenceListGeneratorPage() {
 
         if (!verifyRes.ok) throw new Error("Payment verification failed.")
 
-        await onPaymentSuccess()
+        const verifyData = await verifyRes.json()
+        await onPaymentSuccess(verifyData)
         setPurchasing(false)
         return
       }
@@ -444,7 +447,11 @@ export default function PreferenceListGeneratorPage() {
 
             if (!verifyRes.ok) throw new Error("Payment verification failed")
 
-            setIsPaid(true)
+            const verifyData = await verifyRes.json()
+            if (verifyData.entitlement?.mode) {
+              setMode(verifyData.entitlement.mode)
+            }
+
             setSavedPercentile(currentPerc)
             await checkPurchase()
             await handleGenerate(currentPerc)
@@ -472,7 +479,7 @@ export default function PreferenceListGeneratorPage() {
 
   // 5. Handle PDF Download
   const handleDownloadPDF = async () => {
-    if (!isPaid) return
+    if (mode !== "full") return
     setDownloading(true)
     setErrorMsg(null)
     try {
