@@ -713,15 +713,93 @@ export async function getPreferenceListEntitlement(
     }
   }
 
-  // Step 2: CAP Round IS purchased -> Check if entered percentile is saved (or Full Plan)
-  if (isPercentileSaved || isFullPlan) {
+  // Step 2: Handle Premium (₹5000) and Elite (₹6000) Plan Users
+  if (isFullPlan) {
+    if (isPercentileSaved) {
+      return {
+        mode: "full",
+        hasRoundAccess: true,
+        isPercentileSaved: true,
+        enablePdf: true,
+        message: "Full Preference List unlocked.",
+        isFullPlan: true,
+        planName: access.planName,
+        allowedRounds: access.allowedRounds,
+        savedPercentiles: access.savedPercentiles,
+        purchasedSlots: access.purchasedSlots,
+        totalMaxSlots: access.totalMaxSlots,
+        usedSlots: access.usedSlots,
+      }
+    }
+
+    // New percentile entered by Premium / Elite user
+    if (access.usedSlots < access.totalMaxSlots) {
+      // Auto-save the new percentile for Premium/Elite plan user
+      try {
+        if (db && (db as any).preferenceSavedPercentile) {
+          await db.preferenceSavedPercentile.upsert({
+            where: {
+              userId_savedPercentile: {
+                userId,
+                savedPercentile: enteredPercentile,
+              },
+            },
+            create: {
+              userId,
+              savedPercentile: enteredPercentile,
+            },
+            update: {},
+          })
+        }
+      } catch (e) {
+        console.error("Error auto-saving percentile for Premium/Elite plan:", e)
+      }
+
+      const updatedSaved = Array.from(new Set([...access.savedPercentiles, enteredPercentile]))
+      const updatedUsedSlots = updatedSaved.length
+
+      return {
+        mode: "full",
+        hasRoundAccess: true,
+        isPercentileSaved: true,
+        enablePdf: true,
+        message: "Full Preference List unlocked.",
+        isFullPlan: true,
+        planName: access.planName,
+        allowedRounds: access.allowedRounds,
+        savedPercentiles: updatedSaved,
+        purchasedSlots: access.purchasedSlots,
+        totalMaxSlots: access.totalMaxSlots,
+        usedSlots: updatedUsedSlots,
+      }
+    } else {
+      // All slots used up for Premium/Elite plan
+      return {
+        mode: "blocked",
+        hasRoundAccess: true,
+        isPercentileSaved: false,
+        enablePdf: false,
+        message: `You have already used all ${access.totalMaxSlots} Saved Percentile slots. Purchase +1 Saved Percentile (₹599) to save another percentile.`,
+        isFullPlan: true,
+        planName: access.planName,
+        allowedRounds: access.allowedRounds,
+        savedPercentiles: access.savedPercentiles,
+        purchasedSlots: access.purchasedSlots,
+        totalMaxSlots: access.totalMaxSlots,
+        usedSlots: access.usedSlots,
+      }
+    }
+  }
+
+  // Step 3: Handle Standard ₹599 Single-Round Plan Users (Logic UNCHANGED)
+  if (isPercentileSaved) {
     return {
       mode: "full",
       hasRoundAccess: true,
       isPercentileSaved: true,
       enablePdf: true,
       message: "Full Preference List unlocked.",
-      isFullPlan,
+      isFullPlan: false,
       planName: access.planName,
       allowedRounds: access.allowedRounds,
       savedPercentiles: access.savedPercentiles,
@@ -731,7 +809,6 @@ export async function getPreferenceListEntitlement(
     }
   }
 
-  // Step 3: CAP Round IS purchased BUT entered percentile is NOT saved
   return {
     mode: "blocked",
     hasRoundAccess: true,
