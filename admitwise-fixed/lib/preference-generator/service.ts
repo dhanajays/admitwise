@@ -60,7 +60,7 @@ export const BRANCH_GROUPS: BranchGroup[] = [
   },
   {
     groupId: "ELECTRONICS_TELECOMM",
-    displayName: "Electronics and Telecommunication Engg.",
+    displayName: "Electronics and Telecommunication Engg",
     aliases: [
       "Electronics and Telecommunication Engg.",
       "Electronics and Telecommunication Engg",

@@ -44,9 +44,10 @@ export function formatBranchDisplayName(branchName?: string | null): string {
     trimmed === "Electronics and Telecommunication Engineering" ||
     trimmed === "Electronics & Telecommunication Engineering" ||
     trimmed === "Electronics and Telecommunication Engg" ||
-    trimmed === "Electronics & Telecommunication Engg"
+    trimmed === "Electronics & Telecommunication Engg" ||
+    trimmed === "Electronics and Telecommunication Engg."
   ) {
-    return "Electronics and Telecommunication Engg."
+    return "Electronics and Telecommunication Engg"
   }
   return trimmed
 }
@@ -97,7 +98,7 @@ const RAW_BRANCHES = [
   "Electrical and Computer Engineering",
   "Electrical and Electronics Engineering",
   "Electrical, Electronics and Power",
-  "Electronics and Telecommunication Engg.",
+  "Electronics and Telecommunication Engg",
   "Electronics Engineering",
   "Electronics Engineering (VLSI Design and Technology)",
   "Electronics and Biomedical Engineering",
@@ -105,7 +106,7 @@ const RAW_BRANCHES = [
   "Electronics and Communication Engineering",
   "Electronics and Computer Engineering",
   "Electronics and Computer Science",
-  "Electronics and Telecommunication Engg.",
+  "Electronics and Telecommunication Engg",
   "Fashion Technology",
   "Fibres and Textile Processing Technology",
   "Food Engineering",
