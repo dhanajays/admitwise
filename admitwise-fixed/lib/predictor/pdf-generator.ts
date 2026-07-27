@@ -1,6 +1,7 @@
 import { jsPDF, GState } from "jspdf"
 import autoTable from "jspdf-autotable"
 import type { PredictionResult, StudentInput } from "./types"
+import { formatBranchDisplayName } from "@/lib/master-config"
 
 function getChanceColor(chance: string): [number, number, number] {
   if (chance === "Very High" || chance === "High") return [34, 197, 94] // Green
@@ -201,7 +202,7 @@ export async function generatePredictionPDF(
     return [
       (index + 1).toString(),
       r.collegeName || "N/A",
-      r.branchName || "N/A",
+      formatBranchDisplayName(r.branchName) || "N/A",
       r.category || "N/A",
       isAllIndia ? r.admissionType || "N/A" : r.status || "N/A",
       examMeritCell,

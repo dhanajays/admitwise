@@ -1,5 +1,6 @@
 import { PreferenceDatasetLoader } from "./dataset-loader"
 import type { DatasetOptions, PreferenceInput, PreferenceResultItem } from "./types"
+import { formatBranchDisplayName } from "@/lib/master-config"
 
 export interface BranchGroup {
   groupId: string
@@ -59,8 +60,9 @@ export const BRANCH_GROUPS: BranchGroup[] = [
   },
   {
     groupId: "ELECTRONICS_TELECOMM",
-    displayName: "Electronics & Telecommunication Engineering",
+    displayName: "Electronics and Telecommunication Engg.",
     aliases: [
+      "Electronics and Telecommunication Engg.",
       "Electronics and Telecommunication Engg",
       "Electronics & Telecommunication Engineering",
       "Electronics and Communication Engineering",
@@ -160,7 +162,7 @@ export class PreferenceGeneratorService {
       const categoriesSet = new Set<string>()
 
       for (const item of res.records) {
-        if (item.branchName) branchesSet.add(item.branchName.trim())
+        if (item.branchName) branchesSet.add(formatBranchDisplayName(item.branchName.trim()))
         if (item.city) citiesSet.add(item.city.trim())
         if (item.category) categoriesSet.add(item.category.trim())
       }
@@ -515,7 +517,7 @@ export class PreferenceGeneratorService {
         collegeCode: openItem.collegeCode,
         collegeName: openItem.collegeName,
         branchCode: openItem.branchCode,
-        branchName: openItem.branchName,
+        branchName: formatBranchDisplayName(openItem.branchName),
         city: openItem.city,
         status: openItem.status,
         homeUniversity: openItem.homeUniversity,

@@ -23,6 +23,7 @@ import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 import type { PreferenceResultItem } from "@/lib/preference-generator/types"
 import { loadRazorpayScript } from "@/lib/razorpay-client"
+import { formatBranchDisplayName } from "@/lib/master-config"
 
 const CAP_ROUNDS = ["Round 1", "Round 2", "Round 3", "Round 4"]
 
@@ -855,9 +856,10 @@ export default function PreferenceListGeneratorPage() {
                       </div>
 
                       <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
+
                         <span className="flex items-center gap-1">
                           <GraduationCap className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="font-semibold text-slate-700">{item.branchName}</span>
+                          <span className="font-semibold text-slate-700">{formatBranchDisplayName(item.branchName)}</span>
                         </span>
                         <span className="flex items-center gap-1">
                           <MapPin className="h-3.5 w-3.5 text-slate-400" />

@@ -46,6 +46,7 @@ import {
   CATEGORIES,
   CAP_ROUNDS,
   STANDARDIZED_BRANCHES,
+  formatBranchDisplayName,
 } from "@/lib/master-config"
 
 // ─── CAP Round access rules per plan ─────────────────────────────────────────
@@ -891,7 +892,7 @@ const ResultCard = React.memo(function ResultCard({
           <div className="mt-2.5 flex flex-wrap gap-4 text-xs text-slate-500">
             <span className="flex items-center gap-1.5">
               <GraduationCap className="h-4.5 w-4.5 text-slate-400" />
-              {result.courseName}
+              {formatBranchDisplayName(result.courseName)}
             </span>
             <span className="font-semibold text-slate-450">Choice Code: {result.choiceCode}</span>
           </div>

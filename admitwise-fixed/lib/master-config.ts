@@ -37,6 +37,20 @@ export const CAP_ROUNDS = [
   { id: "Round 4", label: "CAP Round IV", stage: "IV" },
 ]
 
+export function formatBranchDisplayName(branchName?: string | null): string {
+  if (!branchName) return ""
+  const trimmed = branchName.trim()
+  if (
+    trimmed === "Electronics and Telecommunication Engineering" ||
+    trimmed === "Electronics & Telecommunication Engineering" ||
+    trimmed === "Electronics and Telecommunication Engg" ||
+    trimmed === "Electronics & Telecommunication Engg"
+  ) {
+    return "Electronics and Telecommunication Engg."
+  }
+  return trimmed
+}
+
 const RAW_BRANCHES = [
   "Aeronautical Engineering",
   "Agricultural Engineering",
@@ -77,12 +91,13 @@ const RAW_BRANCHES = [
   "Data Science",
   "Dyestuff Technology",
   "Electronics and Communication Engineering (Bio-Medical Engineering)",
+
   "Electrical Engineering (Electronics and Power)",
   "Electrical Engineering",
   "Electrical and Computer Engineering",
   "Electrical and Electronics Engineering",
   "Electrical, Electronics and Power",
-  "Electronics & Telecommunication Engineering",
+  "Electronics and Telecommunication Engg.",
   "Electronics Engineering",
   "Electronics Engineering (VLSI Design and Technology)",
   "Electronics and Biomedical Engineering",
@@ -90,7 +105,7 @@ const RAW_BRANCHES = [
   "Electronics and Communication Engineering",
   "Electronics and Computer Engineering",
   "Electronics and Computer Science",
-  "Electronics and Telecommunication Engineering",
+  "Electronics and Telecommunication Engg.",
   "Fashion Technology",
   "Fibres and Textile Processing Technology",
   "Food Engineering",
@@ -143,12 +158,12 @@ const RAW_BRANCHES = [
 export const STANDARDIZED_BRANCHES = Array.from(
   new Map(
     RAW_BRANCHES.map((name) => {
-      const trimmed = name.trim().replace(/\s+/g, " ")
-      const id = trimmed
+      const formatted = formatBranchDisplayName(name)
+      const id = formatted
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "")
-      return [id, { id, name: trimmed }]
+      return [id, { id, name: formatted }]
     })
   ).values()
 )

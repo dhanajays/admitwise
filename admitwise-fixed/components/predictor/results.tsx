@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { useSession } from "next-auth/react"
 import type { PredictionResult, StudentInput } from "@/lib/predictor/types"
+import { formatBranchDisplayName } from "@/lib/master-config"
 import { generatePredictionPDF } from "@/lib/predictor/pdf-generator"
 import { ChanceBadge } from "./chance-badge"
 import { Badge } from "@/components/ui/badge"
@@ -124,7 +125,7 @@ const ResultCard = React.memo(function ResultCard({
           <div className="mt-2.5 flex flex-wrap gap-3 text-xs text-slate-500">
             <span className="flex items-center gap-1.5 hover:text-slate-800 transition">
               <GraduationCap className="h-4 w-4 shrink-0" />
-              <span className="break-words">{college.branchName}</span>
+              <span className="break-words">{formatBranchDisplayName(college.branchName)}</span>
             </span>
             <span className="hover:text-slate-800 transition">{college.status}</span>
           </div>
@@ -584,7 +585,7 @@ export const Results = React.memo(function Results({
                       const suffix = idx === 0 ? "st" : idx === 1 ? "nd" : idx === 2 ? "rd" : "th"
                       return (
                         <SelectItem key={idx} value={idx.toString()}>
-                          {idx + 1}{suffix} Pref: {branch}
+                          {idx + 1}{suffix} Pref: {formatBranchDisplayName(branch)}
                         </SelectItem>
                       )
                     })}

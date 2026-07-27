@@ -1,10 +1,21 @@
-import { getCutoffCategory } from "@/lib/master-config"
+import { getCutoffCategory, formatBranchDisplayName } from "@/lib/master-config"
 import type {
   ChanceBand,
   CutoffRow,
   PredictionResult,
   StudentInput,
 } from "./types"
+
+function matchesBranchName(rowBranch: string, targetBranch: string): boolean {
+  if (!rowBranch || !targetBranch) return false
+  const rNorm = formatBranchDisplayName(rowBranch).toLowerCase()
+  const tNorm = formatBranchDisplayName(targetBranch).toLowerCase()
+  if (rNorm.includes(tNorm) || tNorm.includes(rNorm)) return true
+
+  const rClean = rNorm.replace(/[^a-z0-9]/g, "").replace("engineering", "engg")
+  const tClean = tNorm.replace(/[^a-z0-9]/g, "").replace("engineering", "engg")
+  return rClean.includes(tClean) || tClean.includes(rClean)
+}
 
 function getChanceBand(score: number): ChanceBand {
   if (score >= 90) return "Very High"
@@ -55,9 +66,8 @@ export function predict(
 
     // ── Preferred branches (optional filter) ─────────────────────────────────
     if (input.preferredBranches.length > 0) {
-      const branchLower = row.branch_name.toLowerCase()
       const matched = input.preferredBranches.some((b) =>
-        branchLower.includes(b.toLowerCase())
+        matchesBranchName(row.branch_name, b)
       )
       if (!matched) return false
     }
@@ -152,7 +162,7 @@ export function predict(
       collegeCode: row.college_code,
       collegeName: row.college_name,
       branchCode: row.branch_code,
-      branchName: row.branch_name,
+      branchName: formatBranchDisplayName(row.branch_name),
       category: row.category,
       seatSection: row.seat_section,
       status: row.status,
@@ -289,8 +299,7 @@ export function predictAllIndia(
     // Filter 8: Preferred Branches matching
     temp = currentRows.filter(row => {
       if (input.preferredBranches.length > 0) {
-        const branchLower = row.courseName.toLowerCase();
-        return input.preferredBranches.some((b) => branchLower.includes(b.toLowerCase()));
+        return input.preferredBranches.some((b) => matchesBranchName(row.courseName, b));
       }
       return true;
     });
@@ -318,14 +327,11 @@ export function predictAllIndia(
         reasons.push("Percentile/Score is comfortably above the previous cutoff.")
       } else if (margin >= 0.5) {
         score += 20
-        reasons.push("Percentile/Score is above the previous cutoff.")
+        reasons.push("Percentile/Score is slightly above the previous cutoff.")
       } else if (margin >= 0) {
         score += 10
-        reasons.push("Percentile/Score is just above the previous cutoff.")
-      } else if (margin >= -1) {
-        score -= 5
-        reasons.push("Percentile/Score is slightly below the previous cutoff.")
-      } else if (margin >= -3) {
+        reasons.push("Percentile/Score is very close to the cutoff.")
+      } else {
         score -= 20
         reasons.push("Percentile/Score is below the previous cutoff.")
       }

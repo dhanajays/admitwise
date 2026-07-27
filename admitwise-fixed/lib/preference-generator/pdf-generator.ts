@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import type { PreferenceResultItem, PreferenceInput } from "./types"
+import { formatBranchDisplayName } from "@/lib/master-config"
 
 export async function generatePreferencePDF(
   items: PreferenceResultItem[],
@@ -102,7 +103,7 @@ export async function generatePreferencePDF(
   doc.setFontSize(7.5)
   doc.setFont("helvetica", "normal")
   doc.setTextColor(100, 116, 139)
-  const branchPriorityStr = input.preferredBranches.map((b, idx) => `${idx + 1}. ${b}`).join("  |  ")
+  const branchPriorityStr = input.preferredBranches.map((b, idx) => `${idx + 1}. ${formatBranchDisplayName(b)}`).join("  |  ")
   const splitBranchText = doc.splitTextToSize(branchPriorityStr, pageWidth - margin * 2)
   doc.text(splitBranchText, margin, y)
 
@@ -113,7 +114,7 @@ export async function generatePreferencePDF(
   const tableData = items.map((item) => [
     item.priorityIndex,
     `${item.collegeCode} - ${item.collegeName}`,
-    item.branchName,
+    formatBranchDisplayName(item.branchName),
     item.city,
     `${(item.openClosingPercentile ?? item.closingPercentile).toFixed(2)}%`,
     `${(item.categoryClosingPercentile ?? item.closingPercentile).toFixed(2)}%\n(${item.categoryUsed || "Open"})`,
