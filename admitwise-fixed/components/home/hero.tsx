@@ -91,6 +91,22 @@ export function Hero() {
               </Link>
             </motion.div>
 
+            {/* Row 2 CTA Button — Track CAP Round 1 Vacant Seats */}
+            <motion.div 
+              whileHover={{ scale: 1.02 }} 
+              whileTap={{ scale: 0.98 }} 
+              className="w-full"
+            >
+              <Link
+                href="/vacant-seat-tracker"
+                className="flex items-center justify-center gap-3 h-14 sm:h-[60px] px-8 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-extrabold text-base sm:text-lg shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/35 transition-all duration-300 group w-full cursor-pointer"
+              >
+                <Sparkles className="h-5 w-5 text-amber-300 animate-pulse shrink-0" />
+                <span>Track CAP Round 1 Vacant Seats</span>
+                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1.5 shrink-0" />
+              </Link>
+            </motion.div>
+
             {/* Secondary Buttons Row */}
             <div className="flex flex-col sm:flex-row gap-3 w-full">
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full sm:flex-1">
