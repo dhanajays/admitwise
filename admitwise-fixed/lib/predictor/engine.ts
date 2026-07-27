@@ -8,13 +8,9 @@ import type {
 
 function matchesBranchName(rowBranch: string, targetBranch: string): boolean {
   if (!rowBranch || !targetBranch) return false
-  const rNorm = formatBranchDisplayName(rowBranch).toLowerCase()
-  const tNorm = formatBranchDisplayName(targetBranch).toLowerCase()
-  if (rNorm.includes(tNorm) || tNorm.includes(rNorm)) return true
-
-  const rClean = rNorm.replace(/[^a-z0-9]/g, "").replace("engineering", "engg")
-  const tClean = tNorm.replace(/[^a-z0-9]/g, "").replace("engineering", "engg")
-  return rClean.includes(tClean) || tClean.includes(rClean)
+  const rNorm = rowBranch.trim().toLowerCase()
+  const tNorm = targetBranch.trim().toLowerCase()
+  return rNorm === tNorm || rNorm.includes(tNorm) || tNorm.includes(rNorm)
 }
 
 function getChanceBand(score: number): ChanceBand {

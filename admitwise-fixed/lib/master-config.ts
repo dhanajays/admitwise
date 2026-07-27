@@ -39,17 +39,7 @@ export const CAP_ROUNDS = [
 
 export function formatBranchDisplayName(branchName?: string | null): string {
   if (!branchName) return ""
-  const trimmed = branchName.trim()
-  if (
-    trimmed === "Electronics and Telecommunication Engineering" ||
-    trimmed === "Electronics & Telecommunication Engineering" ||
-    trimmed === "Electronics and Telecommunication Engg" ||
-    trimmed === "Electronics & Telecommunication Engg" ||
-    trimmed === "Electronics and Telecommunication Engg."
-  ) {
-    return "Electronics and Telecommunication Engg"
-  }
-  return trimmed
+  return branchName.trim()
 }
 
 const RAW_BRANCHES = [
@@ -98,7 +88,7 @@ const RAW_BRANCHES = [
   "Electrical and Computer Engineering",
   "Electrical and Electronics Engineering",
   "Electrical, Electronics and Power",
-  "Electronics and Telecommunication Engg",
+  "Electronics & Telecommunication Engineering",
   "Electronics Engineering",
   "Electronics Engineering (VLSI Design and Technology)",
   "Electronics and Biomedical Engineering",
