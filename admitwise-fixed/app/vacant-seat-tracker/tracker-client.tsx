@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 import { Reveal } from "@/components/reveal"
 import { UpgradePopup } from "@/components/plans/upgrade-popup"
+import { TrackerSubscriptionModal } from "@/components/plans/tracker-subscription-modal"
 import Link from "next/link"
 import {
   isSubscribed,
@@ -124,6 +125,7 @@ export default function VacantSeatTrackerPage() {
   const [datasetAvailable, setDatasetAvailable] = useState(false)
   const [lockedCategory, setLockedCategory] = useState<string | null>(null)
   const [showUpgradePopup, setShowUpgradePopup] = useState(false)
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
 
   // Tracking results state
   const [results, setResults] = useState<SeatResult[] | null>(null)
@@ -246,23 +248,8 @@ export default function VacantSeatTrackerPage() {
     })
   }
 
-  // Handle Submit / Search
-  const handleTrackSeats = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // 1. Auth Check
-    if (!session || !session.user) {
-      window.location.href = `/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`
-      return
-    }
-
-    // 2. Subscription Gate Check
-    if (!isSubscribed()) {
-      window.location.href = "/plans"
-      return
-    }
-
-    const activeSub = sub || getSubscription()
+  const executeSearch = (overrideSub?: UserSubscription) => {
+    const activeSub = overrideSub || sub || getSubscription()
     let remaining = 0
     let isNewProfile = false
 
@@ -327,6 +314,25 @@ export default function VacantSeatTrackerPage() {
         console.error("Error matching seats:", error)
       }
     })
+  }
+
+  // Handle Submit / Search
+  const handleTrackSeats = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    // 1. Auth Check
+    if (!session || !session.user) {
+      window.location.href = `/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`
+      return
+    }
+
+    // 2. Subscription Gate Check
+    if (!isSubscribed()) {
+      setShowSubscriptionModal(true)
+      return
+    }
+
+    executeSearch()
   }
 
   // Filtered list matching advanced client-side queries
@@ -846,6 +852,17 @@ export default function VacantSeatTrackerPage() {
       </main>
 
       <SiteFooter />
+
+      <TrackerSubscriptionModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        onSuccess={async () => {
+          setShowSubscriptionModal(false)
+          const updated = await syncWithDatabase()
+          setSub(updated)
+          executeSearch(updated)
+        }}
+      />
 
       {showUpgradePopup && (
         <UpgradePopup
