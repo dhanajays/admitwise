@@ -157,127 +157,177 @@ const CURATED_NEWS_SEED = [
   },
 ]
 
+let lastSyncTimestamp = 0
+
 export async function syncLatestNews(): Promise<{ count: number }> {
   try {
     let synced = 0
 
-    // Ensure database contains curated news items
+    // Ensure database contains initial curated news items
     for (const item of CURATED_NEWS_SEED) {
       const slug = item.title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "")
 
-      await db.newsArticle.upsert({
-        where: { sourceUrl: item.sourceUrl },
-        update: {
-          title: item.title,
-          summary: item.summary,
-          content: item.content,
-          category: item.category,
-          imageUrl: item.imageUrl,
-          readTime: item.readTime,
-          isBreaking: item.isBreaking,
-        },
-        create: {
-          title: item.title,
-          slug,
-          summary: item.summary,
-          content: item.content,
-          source: item.source,
-          sourceUrl: item.sourceUrl,
-          category: item.category,
-          imageUrl: item.imageUrl,
-          readTime: item.readTime,
-          isBreaking: item.isBreaking,
-          publishedAt: item.publishedAt,
-        },
-      })
-      synced++
+      try {
+        await db.newsArticle.upsert({
+          where: { sourceUrl: item.sourceUrl },
+          update: {
+            title: item.title,
+            summary: item.summary,
+            content: item.content,
+            category: item.category,
+            imageUrl: item.imageUrl,
+            readTime: item.readTime,
+            isBreaking: item.isBreaking,
+          },
+          create: {
+            title: item.title,
+            slug,
+            summary: item.summary,
+            content: item.content,
+            source: item.source,
+            sourceUrl: item.sourceUrl,
+            category: item.category,
+            imageUrl: item.imageUrl,
+            readTime: item.readTime,
+            isBreaking: item.isBreaking,
+            publishedAt: item.publishedAt,
+          },
+        })
+        synced++
+      } catch (e) {
+        // Ignore single item error
+      }
     }
 
-    // Try fetching external RSS / Google News admission feed asynchronously
-    try {
-      const feeds = [
-        {
-          url: "https://news.google.com/rss/search?q=MHT+CET+CAP+Round+admission+cutoffs&hl=en-IN&gl=IN&ceid=IN:en",
-          defaultSource: "CET Cell Maharashtra",
-        },
-        {
-          url: "https://news.google.com/rss/search?q=NEET+UG+MCC+counselling+seat+matrix&hl=en-IN&gl=IN&ceid=IN:en",
-          defaultSource: "MCC",
-        },
-        {
-          url: "https://news.google.com/rss/search?q=JEE+Main+JoSAA+counselling+cutoffs&hl=en-IN&gl=IN&ceid=IN:en",
-          defaultSource: "NTA",
-        },
-      ]
+    // Configured feeds covering all required official and education sources
+    const feeds = [
+      {
+        url: "https://news.google.com/rss/search?q=State+CET+Cell+Maharashtra+CAP+Round+engineering+admissions&hl=en-IN&gl=IN&ceid=IN:en",
+        defaultSource: "CET Cell Maharashtra",
+      },
+      {
+        url: "https://news.google.com/rss/search?q=DTE+Maharashtra+admission+cutoff+merit+list&hl=en-IN&gl=IN&ceid=IN:en",
+        defaultSource: "DTE Maharashtra",
+      },
+      {
+        url: "https://news.google.com/rss/search?q=NEET+UG+MCC+counselling+seat+matrix+allotment&hl=en-IN&gl=IN&ceid=IN:en",
+        defaultSource: "MCC",
+      },
+      {
+        url: "https://news.google.com/rss/search?q=JEE+Main+NTA+JoSAA+counselling+cutoffs&hl=en-IN&gl=IN&ceid=IN:en",
+        defaultSource: "NTA",
+      },
+      {
+        url: "https://news.google.com/rss/search?q=JoSAA+CSAB+special+round+vacant+seats&hl=en-IN&gl=IN&ceid=IN:en",
+        defaultSource: "JoSAA",
+      },
+      {
+        url: "https://news.google.com/rss/search?q=DGHS+AICTE+engineering+medical+counselling+notice&hl=en-IN&gl=IN&ceid=IN:en",
+        defaultSource: "AICTE",
+      },
+      {
+        url: "https://news.google.com/rss/search?q=Careers360+MHT+CET+NEET+JEE+admission+news&hl=en-IN&gl=IN&ceid=IN:en",
+        defaultSource: "Careers360",
+      },
+      {
+        url: "https://news.google.com/rss/search?q=Shiksha+MHT+CET+CAP+round+cutoff&hl=en-IN&gl=IN&ceid=IN:en",
+        defaultSource: "Shiksha",
+      },
+      {
+        url: "https://news.google.com/rss/search?q=CollegeDekho+Maharashtra+engineering+admissions&hl=en-IN&gl=IN&ceid=IN:en",
+        defaultSource: "CollegeDekho",
+      },
+      {
+        url: "https://news.google.com/rss/search?q=Collegedunia+MHT+CET+NEET+JEE+merit+list&hl=en-IN&gl=IN&ceid=IN:en",
+        defaultSource: "Collegedunia",
+      },
+    ]
 
-      for (const feed of feeds) {
-        const res = await fetch(feed.url, { next: { revalidate: 300 } })
+    for (const feed of feeds) {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 6000) // 6s timeout per source
+
+        const res = await fetch(feed.url, {
+          signal: controller.signal,
+          next: { revalidate: 300 },
+        })
+        clearTimeout(timeoutId)
+
         if (!res.ok) continue
         const xml = await res.text()
 
-        // Basic XML item matcher for RSS feeds
         const itemRegex = /<item>[\s\S]*?<\/item>/gi
         const matches = xml.match(itemRegex) || []
 
-        for (const itemXml of matches.slice(0, 5)) {
-          const titleMatch = itemXml.match(/<title>([\s\S]*?)<\/title>/i)
-          const linkMatch = itemXml.match(/<link>([\s\S]*?)<\/link>/i)
-          const pubDateMatch = itemXml.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)
+        for (const itemXml of matches.slice(0, 6)) {
+          try {
+            const titleMatch = itemXml.match(/<title>([\s\S]*?)<\/title>/i)
+            const linkMatch = itemXml.match(/<link>([\s\S]*?)<\/link>/i)
+            const pubDateMatch = itemXml.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)
 
-          if (!titleMatch || !linkMatch) continue
+            if (!titleMatch || !linkMatch) continue
 
-          const rawTitle = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, "$1").trim()
-          const rawLink = linkMatch[1].trim()
-          const pubDate = pubDateMatch ? new Date(pubDateMatch[1].trim()) : new Date()
+            const rawTitle = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, "$1").trim()
+            const rawLink = linkMatch[1].trim()
+            const pubDate = pubDateMatch ? new Date(pubDateMatch[1].trim()) : new Date()
 
-          if (!rawTitle || !rawLink) continue
+            if (!rawTitle || !rawLink) continue
 
-          const category = classifyCategory(rawTitle)
-          const slug = createSlug(rawTitle)
+            const category = classifyCategory(rawTitle)
+            const slug = createSlug(rawTitle)
 
-          // Determine publisher source badge name from title
-          let source = feed.defaultSource
-          if (rawTitle.toLowerCase().includes("careers360")) source = "Careers360"
-          else if (rawTitle.toLowerCase().includes("shiksha")) source = "Shiksha"
-          else if (rawTitle.toLowerCase().includes("collegedunia")) source = "Collegedunia"
-          else if (rawTitle.toLowerCase().includes("collegedekho")) source = "CollegeDekho"
-          else if (rawTitle.toLowerCase().includes("nta")) source = "NTA"
-          else if (rawTitle.toLowerCase().includes("mcc")) source = "MCC"
-          else if (rawTitle.toLowerCase().includes("cet cell")) source = "CET Cell Maharashtra"
+            // Dynamic Source Identification
+            let source = feed.defaultSource
+            const lowerTitle = rawTitle.toLowerCase()
+            if (lowerTitle.includes("careers360")) source = "Careers360"
+            else if (lowerTitle.includes("shiksha")) source = "Shiksha"
+            else if (lowerTitle.includes("collegedunia")) source = "Collegedunia"
+            else if (lowerTitle.includes("collegedekho")) source = "CollegeDekho"
+            else if (lowerTitle.includes("cet cell") || lowerTitle.includes("mahacet")) source = "CET Cell Maharashtra"
+            else if (lowerTitle.includes("dte")) source = "DTE Maharashtra"
+            else if (lowerTitle.includes("nta")) source = "NTA"
+            else if (lowerTitle.includes("mcc")) source = "MCC"
+            else if (lowerTitle.includes("josaa")) source = "JoSAA"
+            else if (lowerTitle.includes("csab")) source = "CSAB"
 
-          const cleanTitle = rawTitle.replace(/\s*-\s*[^-]+$/, "") // Clean source suffix from Google News title
+            const cleanTitle = rawTitle.replace(/\s*-\s*[^-]+$/, "").trim()
 
-          await db.newsArticle.upsert({
-            where: { sourceUrl: rawLink },
-            update: {
-              title: cleanTitle,
-              category,
-              publishedAt: pubDate,
-            },
-            create: {
-              title: cleanTitle,
-              slug,
-              summary: `${cleanTitle}. Get the latest official updates on ${category} admission counselling, merit list, seat matrix, and cutoff percentiles.`,
-              content: `${cleanTitle}. Read official notifications, schedule updates, cutoff ranks, and seat distribution details directly at the publisher portal.`,
-              source,
-              sourceUrl: rawLink,
-              category,
-              imageUrl: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=800&auto=format&fit=crop&q=80",
-              readTime: "2 min read",
-              isBreaking: true,
-              publishedAt: pubDate,
-            },
-          })
-          synced++
+            await db.newsArticle.upsert({
+              where: { sourceUrl: rawLink },
+              update: {
+                title: cleanTitle,
+                category,
+                publishedAt: pubDate,
+              },
+              create: {
+                title: cleanTitle,
+                slug,
+                summary: `${cleanTitle}. Get the latest official updates on ${category} admission counselling, merit list, seat matrix, and cutoff percentiles.`,
+                content: `${cleanTitle}. Read official notifications, schedule updates, cutoff ranks, and seat distribution details directly at the publisher portal.`,
+                source,
+                sourceUrl: rawLink,
+                category,
+                imageUrl: "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=800&auto=format&fit=crop&q=80",
+                readTime: "2 min read",
+                isBreaking: true,
+                publishedAt: pubDate,
+              },
+            })
+            synced++
+          } catch (itemErr) {
+            // Ignore single article parse error
+          }
         }
+      } catch (feedErr) {
+        // Swallow single source failure so other sources continue seamlessly
       }
-    } catch (rssErr) {
-      console.warn("External RSS fetch warning (falling back to database seed):", rssErr)
     }
 
+    lastSyncTimestamp = Date.now()
     return { count: synced }
   } catch (error) {
     console.error("Error syncing news articles:", error)
@@ -285,8 +335,17 @@ export async function syncLatestNews(): Promise<{ count: number }> {
   }
 }
 
+// Background auto-trigger for cloud requests if last sync > 10 minutes ago
+export async function triggerAutoSyncIfNeeded(): Promise<void> {
+  const tenMinutes = 10 * 60 * 1000
+  if (Date.now() - lastSyncTimestamp > tenMinutes) {
+    syncLatestNews().catch((err) => console.error("Cloud background auto-sync warning:", err))
+  }
+}
+
 export async function getBreakingNews(): Promise<NewsArticleItem[]> {
   try {
+    triggerAutoSyncIfNeeded()
     let items = await db.newsArticle.findMany({
       where: { isBreaking: true },
       orderBy: { publishedAt: "desc" },
