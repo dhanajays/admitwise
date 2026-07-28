@@ -25,6 +25,7 @@ const navLinks = [
   { href: "/predictor", label: "Predictor" },
   { href: "/preference-list-generator", label: "Preference List Generator" },
   { href: "/vacant-seat-tracker", label: "Vacant Seat Tracker" },
+  { href: "/news", label: "News" },
   { href: "/plans", label: "Plans" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },

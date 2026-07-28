@@ -6,6 +6,7 @@ import { Stats } from "@/components/home/stats"
 import { Services } from "@/components/home/services"
 import { Process } from "@/components/home/process"
 import { Testimonials } from "@/components/home/testimonials"
+import { LatestNewsSection } from "@/components/home/latest-news"
 import { FaqCta } from "@/components/home/faq-cta"
 import {
   generateSeoMetadata,
@@ -54,6 +55,7 @@ export default function HomePage() {
         <Services />
         <Process />
         <Testimonials />
+        <LatestNewsSection />
         <FaqCta />
       </main>
       <SiteFooter />

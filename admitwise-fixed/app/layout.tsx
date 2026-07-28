@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono, Plus_Jakarta_Sans } from 'next/font/google'
 import { AuthSessionProvider } from '@/components/auth-session-provider'
 import { MandatoryPhoneGate } from '@/components/mandatory-phone-gate'
+import { BreakingTicker } from '@/components/news/breaking-ticker'
 import { GoogleAnalytics } from '@next/third-parties/google'
 import Script from 'next/script'
 import './globals.css'
@@ -50,6 +51,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${jakarta.variable} bg-background`}
     >
       <body className="font-sans antialiased">
+        <BreakingTicker />
         <AuthSessionProvider>
           <MandatoryPhoneGate />
           {children}

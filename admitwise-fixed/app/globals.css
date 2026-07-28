@@ -269,3 +269,12 @@
   background: rgba(124, 58, 237, 0.25);
 }
 
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+

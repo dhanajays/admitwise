@@ -566,4 +566,25 @@ model PreferenceGeneratorHistory {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, round])
+}
+
+model NewsArticle {
+  id          String   @id @default(cuid())
+  title       String   @db.Text
+  slug        String   @unique
+  summary     String   @db.Text
+  content     String?  @db.Text
+  source      String   // "CET Cell Maharashtra", "Careers360", "Shiksha", "NTA", "MCC", "JoSAA", "CollegeDekho", "Collegedunia", etc.
+  sourceUrl   String   @unique @db.Text
+  category    String   // "MHT CET", "CAP Round", "NEET", "JEE", "Official Notice", "Merit List", "Seat Matrix", "Vacant Seats", "Option Form", "Cutoffs", "Counselling"
+  imageUrl    String?  @db.Text
+  readTime    String   @default("2 min read")
+  isBreaking  Boolean  @default(false)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([publishedAt])
+  @@index([isBreaking])
 }
