@@ -188,9 +188,9 @@ export function NewsClient({ initialData }: NewsClientProps) {
           {articles.length === 0 ? (
             <div className="glass-card rounded-3xl border border-slate-200 p-12 text-center bg-white my-8">
               <Newspaper className="mx-auto h-12 w-12 text-slate-300 mb-4" />
-              <h3 className="text-lg font-bold text-slate-900">No Admission News Found</h3>
+              <h3 className="text-lg font-bold text-slate-900">No admission updates available for this category.</h3>
               <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                We couldn&apos;t find any news articles matching your search query &quot;{search}&quot;. Try clearing filters or searching for keywords like MHT CET, CAP Round, or Cutoffs.
+                Try selecting &quot;All&quot; or choosing another admission category filter to view the latest updates.
               </p>
               <button
                 onClick={() => {
@@ -200,7 +200,7 @@ export function NewsClient({ initialData }: NewsClientProps) {
                 }}
                 className="mt-6 inline-flex items-center gap-2 rounded-full bg-blue-600 px-6 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700 transition"
               >
-                Reset Filters
+                Show All Categories
               </button>
             </div>
           ) : (

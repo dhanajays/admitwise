@@ -395,6 +395,156 @@ export async function getBreakingNews(): Promise<NewsArticleItem[]> {
   }
 }
 
+export function articleBelongsToCategory(
+  article: { title?: string | null; summary?: string | null; content?: string | null; source?: string | null; category?: string | null },
+  selectedCategory: string
+): boolean {
+  if (!selectedCategory || selectedCategory === "All") return true
+
+  const title = (article.title || "").toLowerCase()
+  const summary = (article.summary || "").toLowerCase()
+  const content = (article.content || "").toLowerCase()
+  const source = (article.source || "").toLowerCase()
+  const storedCat = (article.category || "").toLowerCase()
+  const fullText = `${title} ${summary} ${content} ${source} ${storedCat}`
+
+  switch (selectedCategory) {
+    case "MHT CET":
+      return (
+        fullText.includes("mht cet") ||
+        fullText.includes("maharashtra cet") ||
+        fullText.includes("cet cell maharashtra") ||
+        fullText.includes("mht cet pcm") ||
+        fullText.includes("mht cet pcb") ||
+        fullText.includes("mht cet admission") ||
+        fullText.includes("mht cet result") ||
+        fullText.includes("mht cet counselling") ||
+        fullText.includes("mht cet registration") ||
+        fullText.includes("mahacet") ||
+        fullText.includes("cet cell")
+      )
+
+    case "CAP Round":
+      return (
+        fullText.includes("cap round") ||
+        fullText.includes("cap schedule") ||
+        fullText.includes("cap seat matrix") ||
+        fullText.includes("cap merit list") ||
+        fullText.includes("cap option form") ||
+        fullText.includes("cap admission") ||
+        fullText.includes("cap 1") ||
+        fullText.includes("cap 2") ||
+        fullText.includes("cap 3") ||
+        fullText.includes("cap 4")
+      )
+
+    case "NEET":
+      return (
+        fullText.includes("neet ug") ||
+        fullText.includes("neet") ||
+        fullText.includes("mcc counselling") ||
+        fullText.includes("mbbs admission") ||
+        fullText.includes("bds admission") ||
+        fullText.includes("ayush counselling") ||
+        fullText.includes("medical admission") ||
+        fullText.includes("neet result") ||
+        fullText.includes("neet merit list") ||
+        source.includes("mcc") ||
+        source.includes("dghs")
+      )
+
+    case "JEE":
+      return (
+        fullText.includes("jee main") ||
+        fullText.includes("jee advanced") ||
+        fullText.includes("jee") ||
+        fullText.includes("josaa") ||
+        fullText.includes("csab") ||
+        fullText.includes("nit admission") ||
+        fullText.includes("iiit admission") ||
+        fullText.includes("gfti admission") ||
+        source.includes("josaa") ||
+        source.includes("csab")
+      )
+
+    case "Official Notice":
+      return (
+        source.includes("cet cell") ||
+        source.includes("nta") ||
+        source.includes("mcc") ||
+        source.includes("dte") ||
+        source.includes("dghs") ||
+        source.includes("aicte") ||
+        source.includes("josaa") ||
+        source.includes("csab") ||
+        fullText.includes("notice") ||
+        fullText.includes("notification") ||
+        fullText.includes("circular") ||
+        fullText.includes("press release") ||
+        fullText.includes("official announcement")
+      )
+
+    case "Merit List":
+      return (
+        fullText.includes("merit list") ||
+        fullText.includes("final merit list") ||
+        fullText.includes("provisional merit list") ||
+        fullText.includes("rank list") ||
+        fullText.includes("selection list")
+      )
+
+    case "Seat Matrix":
+      return (
+        fullText.includes("seat matrix") ||
+        fullText.includes("seat distribution") ||
+        fullText.includes("intake matrix") ||
+        fullText.includes("seat availability")
+      )
+
+    case "Vacant Seats":
+      return (
+        fullText.includes("vacant seats") ||
+        fullText.includes("institute vacancy") ||
+        fullText.includes("college vacancy") ||
+        fullText.includes("seat vacancy") ||
+        fullText.includes("vacancy") ||
+        fullText.includes("vacant seat")
+      )
+
+    case "Option Form":
+      return (
+        fullText.includes("option form") ||
+        fullText.includes("choice filling") ||
+        fullText.includes("preference form") ||
+        fullText.includes("web options")
+      )
+
+    case "Cutoffs":
+      return (
+        fullText.includes("cutoff") ||
+        fullText.includes("cut-off") ||
+        fullText.includes("closing rank") ||
+        fullText.includes("opening rank") ||
+        fullText.includes("closing percentile") ||
+        fullText.includes("opening percentile")
+      )
+
+    case "Counselling":
+      return (
+        fullText.includes("counselling") ||
+        fullText.includes("counseling") ||
+        fullText.includes("registration") ||
+        fullText.includes("choice filling") ||
+        fullText.includes("reporting") ||
+        fullText.includes("admission schedule") ||
+        fullText.includes("round schedule")
+      )
+
+    default:
+      return storedCat === selectedCategory.toLowerCase()
+  }
+}
+
 export async function getLatestNews(options?: {
   category?: string
   search?: string
@@ -406,56 +556,51 @@ export async function getLatestNews(options?: {
   try {
     const page = options?.page || 1
     const limit = options?.limit || 12
-    const skip = (page - 1) * limit
 
-    const where: any = {}
+    let allRawArticles = await db.newsArticle.findMany({
+      orderBy: { publishedAt: "desc" },
+    })
 
-    if (options?.category && options.category !== "All") {
-      where.category = options.category
-    }
-
-    if (options?.source && options.source !== "All") {
-      where.source = options.source
-    }
-
-    if (options?.breaking) {
-      where.isBreaking = true
-    }
-
-    if (options?.search && options.search.trim()) {
-      const q = options.search.trim()
-      where.OR = [
-        { title: { contains: q, mode: "insensitive" } },
-        { summary: { contains: q, mode: "insensitive" } },
-        { category: { contains: q, mode: "insensitive" } },
-        { source: { contains: q, mode: "insensitive" } },
-      ]
-    }
-
-    let [articles, total] = await Promise.all([
-      db.newsArticle.findMany({
-        where,
-        orderBy: { publishedAt: "desc" },
-        skip,
-        take: limit,
-      }),
-      db.newsArticle.count({ where }),
-    ])
-
-    if (total === 0 && !options?.search && (!options?.category || options.category === "All")) {
+    if (allRawArticles.length === 0) {
       await syncLatestNews()
-      ;[articles, total] = await Promise.all([
-        db.newsArticle.findMany({
-          where,
-          orderBy: { publishedAt: "desc" },
-          skip,
-          take: limit,
-        }),
-        db.newsArticle.count({ where }),
-      ])
+      allRawArticles = await db.newsArticle.findMany({
+        orderBy: { publishedAt: "desc" },
+      })
     }
 
-    const items: NewsArticleItem[] = articles.map((i) => ({
+    let filtered = allRawArticles
+
+    // 1. Category Filter
+    if (options?.category && options.category !== "All") {
+      filtered = filtered.filter((a) => articleBelongsToCategory(a, options.category!))
+    }
+
+    // 2. Source Filter
+    if (options?.source && options.source !== "All") {
+      filtered = filtered.filter((a) => a.source.toLowerCase() === options.source!.toLowerCase())
+    }
+
+    // 3. Breaking Filter
+    if (options?.breaking) {
+      filtered = filtered.filter((a) => a.isBreaking)
+    }
+
+    // 4. Search Filter
+    if (options?.search && options.search.trim()) {
+      const q = options.search.trim().toLowerCase()
+      filtered = filtered.filter(
+        (a) =>
+          a.title.toLowerCase().includes(q) ||
+          a.summary.toLowerCase().includes(q) ||
+          a.category.toLowerCase().includes(q) ||
+          a.source.toLowerCase().includes(q)
+      )
+    }
+
+    const total = filtered.length
+    const paginated = filtered.slice((page - 1) * limit, page * limit)
+
+    const items: NewsArticleItem[] = paginated.map((i) => ({
       id: i.id,
       title: i.title,
       slug: i.slug,
@@ -478,8 +623,11 @@ export async function getLatestNews(options?: {
     }
   } catch (error) {
     console.error("Error fetching news list:", error)
+    const seedFiltered = CURATED_NEWS_SEED.filter((a) =>
+      options?.category ? articleBelongsToCategory(a, options.category) : true
+    )
     return {
-      articles: CURATED_NEWS_SEED.map((i, idx) => ({
+      articles: seedFiltered.map((i, idx) => ({
         id: `seed-${idx}`,
         title: i.title,
         slug: i.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
@@ -494,7 +642,7 @@ export async function getLatestNews(options?: {
         publishedAt: i.publishedAt.toISOString(),
         createdAt: new Date().toISOString(),
       })),
-      total: CURATED_NEWS_SEED.length,
+      total: seedFiltered.length,
       totalPages: 1,
     }
   }
