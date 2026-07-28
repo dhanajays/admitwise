@@ -664,6 +664,16 @@ export interface PreferenceEntitlement {
   usedSlots: number
 }
 
+export function canAccessPreferenceGenerator(
+  access: { hasAccess: boolean; allowedRounds: string[]; isFullPlan: boolean },
+  selectedRound: string
+): boolean {
+  if (!access) return false
+  if (access.isFullPlan) return true
+  if (access.hasAccess && access.allowedRounds.includes(selectedRound)) return true
+  return false
+}
+
 export async function getPreferenceListEntitlement(
   userId: string | null | undefined,
   selectedRound: string,
@@ -687,23 +697,17 @@ export async function getPreferenceListEntitlement(
   }
 
   const access = await getPreferenceListAccess(userId)
-  const isFullPlan = access.isFullPlan
+  const hasAccess = canAccessPreferenceGenerator(access, selectedRound)
 
-  const hasRoundAccess = isFullPlan || access.allowedRounds.includes(selectedRound)
-
-  const isPercentileSaved = access.savedPercentiles.some(
-    (sp) => Math.abs(sp - enteredPercentile) < 0.01
-  )
-
-  // Step 1: Has the student purchased this CAP Round?
-  if (!hasRoundAccess) {
+  // Step 1: Unpaid Preview Mode (No purchase and no Admin Grant for this round)
+  if (!hasAccess) {
     return {
       mode: "preview",
       hasRoundAccess: false,
-      isPercentileSaved,
+      isPercentileSaved: false,
       enablePdf: false,
       message: `Purchase ${selectedRound} (₹599) to unlock full preference list.`,
-      isFullPlan: false,
+      isFullPlan: access.isFullPlan,
       planName: access.planName,
       allowedRounds: access.allowedRounds,
       savedPercentiles: access.savedPercentiles,
@@ -713,8 +717,12 @@ export async function getPreferenceListEntitlement(
     }
   }
 
-  // Step 2: Handle Premium (₹5000) and Elite (₹6000) Plan Users
-  if (isFullPlan) {
+  // Step 2: Handle Premium (₹5000) and Elite (₹6000) Plan Users with slot limits
+  if (access.isFullPlan) {
+    const isPercentileSaved = access.savedPercentiles.some(
+      (sp) => Math.abs(sp - enteredPercentile) < 0.01
+    )
+
     if (isPercentileSaved) {
       return {
         mode: "full",
@@ -732,32 +740,30 @@ export async function getPreferenceListEntitlement(
       }
     }
 
-    // New percentile entered by Premium / Elite user
     if (access.usedSlots < access.totalMaxSlots) {
-      // Auto-save the new percentile for Premium/Elite plan user
-      try {
-        if (db && (db as any).preferenceSavedPercentile) {
-          await db.preferenceSavedPercentile.upsert({
-            where: {
-              userId_savedPercentile: {
+      if (enteredPercentile !== undefined && enteredPercentile !== null && !isNaN(enteredPercentile)) {
+        try {
+          if (db && (db as any).preferenceSavedPercentile) {
+            await db.preferenceSavedPercentile.upsert({
+              where: {
+                userId_savedPercentile: {
+                  userId,
+                  savedPercentile: enteredPercentile,
+                },
+              },
+              create: {
                 userId,
                 savedPercentile: enteredPercentile,
               },
-            },
-            create: {
-              userId,
-              savedPercentile: enteredPercentile,
-            },
-            update: {},
-          })
+              update: {},
+            })
+          }
+        } catch (e) {
+          console.error("Error auto-saving percentile for Premium/Elite plan:", e)
         }
-      } catch (e) {
-        console.error("Error auto-saving percentile for Premium/Elite plan:", e)
       }
 
-      const updatedSaved = Array.from(new Set([...access.savedPercentiles, enteredPercentile]))
-      const updatedUsedSlots = updatedSaved.length
-
+      const updatedSaved = Array.from(new Set([...access.savedPercentiles, enteredPercentile].filter((p) => typeof p === "number" && !isNaN(p))))
       return {
         mode: "full",
         hasRoundAccess: true,
@@ -770,10 +776,9 @@ export async function getPreferenceListEntitlement(
         savedPercentiles: updatedSaved,
         purchasedSlots: access.purchasedSlots,
         totalMaxSlots: access.totalMaxSlots,
-        usedSlots: updatedUsedSlots,
+        usedSlots: updatedSaved.length,
       }
     } else {
-      // All slots used up for Premium/Elite plan
       return {
         mode: "blocked",
         hasRoundAccess: true,
@@ -791,36 +796,48 @@ export async function getPreferenceListEntitlement(
     }
   }
 
-  // Step 3: Handle Standard ₹599 Single-Round Plan Users (Logic UNCHANGED)
-  if (isPercentileSaved) {
-    return {
-      mode: "full",
-      hasRoundAccess: true,
-      isPercentileSaved: true,
-      enablePdf: true,
-      message: "Full Preference List unlocked.",
-      isFullPlan: false,
-      planName: access.planName,
-      allowedRounds: access.allowedRounds,
-      savedPercentiles: access.savedPercentiles,
-      purchasedSlots: access.purchasedSlots,
-      totalMaxSlots: access.totalMaxSlots,
-      usedSlots: access.usedSlots,
+  // Step 3: Handle Standard ₹599 Plan & Admin Granted Users
+  // When an Admin grants access or user purchases access for this round, grant FULL unlocked access!
+  if (enteredPercentile !== undefined && enteredPercentile !== null && !isNaN(enteredPercentile)) {
+    const isSaved = access.savedPercentiles.some((sp) => Math.abs(sp - enteredPercentile) < 0.01)
+    if (!isSaved) {
+      try {
+        const savedModel = (db as any)?.preferenceSavedPercentile
+        if (savedModel && savedModel.upsert) {
+          await savedModel.upsert({
+            where: {
+              userId_savedPercentile: {
+                userId,
+                savedPercentile: enteredPercentile,
+              },
+            },
+            create: {
+              userId,
+              savedPercentile: enteredPercentile,
+            },
+            update: {},
+          })
+        }
+      } catch (e) {
+        console.error("Error auto-saving percentile for granted preference access:", e)
+      }
     }
   }
 
+  const finalSavedList = Array.from(new Set([...access.savedPercentiles, enteredPercentile].filter((p) => typeof p === "number" && !isNaN(p))))
+
   return {
-    mode: "blocked",
+    mode: "full",
     hasRoundAccess: true,
-    isPercentileSaved: false,
-    enablePdf: false,
-    message: "You don't have this percentile saved. Purchase +1 Saved Percentile (₹599) to use this percentile.",
+    isPercentileSaved: true,
+    enablePdf: true,
+    message: "Full Preference List unlocked.",
     isFullPlan: false,
-    planName: access.planName,
+    planName: access.planName || "Preference List Unlocked",
     allowedRounds: access.allowedRounds,
-    savedPercentiles: access.savedPercentiles,
+    savedPercentiles: finalSavedList,
     purchasedSlots: access.purchasedSlots,
-    totalMaxSlots: access.totalMaxSlots,
-    usedSlots: access.usedSlots,
+    totalMaxSlots: Math.max(access.totalMaxSlots, finalSavedList.length, 1),
+    usedSlots: finalSavedList.length,
   }
 }
