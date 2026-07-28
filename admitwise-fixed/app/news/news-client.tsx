@@ -255,13 +255,15 @@ export function NewsClient({ initialData }: NewsClientProps) {
 
                   {/* Actions */}
                   <div className="p-6 pt-0">
-                    <Link
-                      href={`/news/${item.slug}`}
-                      className="flex items-center justify-between w-full rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200/80 px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-blue-700 transition"
+                    <a
+                      href={item.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between w-full rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200/80 px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-blue-700 transition cursor-pointer"
                     >
-                      <span>Read Article &amp; Summary</span>
-                      <ArrowRight className="h-4 w-4 text-blue-600 transition-transform group-hover:translate-x-1" />
-                    </Link>
+                      <span className="truncate">Read Article on {item.source}</span>
+                      <ExternalLink className="h-4 w-4 text-blue-600 transition-transform group-hover:translate-x-0.5 shrink-0 ml-1" />
+                    </a>
                   </div>
                 </motion.div>
               ))}

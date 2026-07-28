@@ -50,15 +50,17 @@ export function BreakingTicker() {
             >
               {displayItems.map((item, idx) => (
                 <div key={`${item.id}-${idx}`} className="inline-flex items-center gap-4 shrink-0">
-                  <Link
-                    href={`/news/${item.slug}`}
+                  <a
+                    href={item.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="font-medium text-slate-200 hover:text-white hover:underline transition duration-200 flex items-center gap-1.5"
                   >
                     <span className="text-[10px] font-bold text-amber-400 uppercase bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.2 rounded shrink-0">
                       {item.source}
                     </span>
                     <span className="truncate max-w-[280px] sm:max-w-md md:max-w-xl">{item.title}</span>
-                  </Link>
+                  </a>
                   <span className="text-slate-600 font-extrabold text-xs">|</span>
                 </div>
               ))}

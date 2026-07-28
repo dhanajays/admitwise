@@ -102,13 +102,15 @@ export function LatestNewsSection() {
 
               {/* Card Footer Action */}
               <div className="p-5 pt-0">
-                <Link
-                  href={`/news/${item.slug}`}
+                <a
+                  href={item.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="mt-3 flex items-center justify-between w-full rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200/80 px-3.5 py-2 text-xs font-bold text-slate-700 hover:text-blue-700 transition"
                 >
-                  <span>Read Article</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-blue-600 transition-transform group-hover:translate-x-1" />
-                </Link>
+                  <span className="truncate">Read Article on {item.source}</span>
+                  <ExternalLink className="h-3.5 w-3.5 text-blue-600 transition-transform group-hover:translate-x-0.5 shrink-0 ml-1" />
+                </a>
               </div>
             </motion.div>
           ))}
