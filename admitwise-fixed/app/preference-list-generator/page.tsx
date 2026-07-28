@@ -643,7 +643,7 @@ export default function PreferenceListGeneratorPage() {
                 step="0.01"
                 min="0"
                 max="100"
-                placeholder="e.g. 95.63"
+                placeholder="Enter your percentile"
                 value={percentile}
                 onChange={(e) => setPercentile(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 shadow-2xs transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-semibold"

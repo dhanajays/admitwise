@@ -279,7 +279,7 @@ export async function POST(req: Request) {
         round = "Round 1",
         accessStatus = "Active",
         accessType = "Preference List Generator (₹599)",
-        percentile = 95,
+        percentile,
         planType,
       } = body
 

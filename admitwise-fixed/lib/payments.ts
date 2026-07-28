@@ -199,7 +199,7 @@ export async function fulfillAdminGrant(params: AdminGrantParams) {
     accessType = "Preference List Generator (₹599)",
     round = "Round 1",
     accessStatus = "Active",
-    percentile = 95,
+    percentile,
     planType,
   } = params
 

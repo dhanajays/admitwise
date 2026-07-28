@@ -124,7 +124,6 @@ export default function StudentManagerPage() {
         body.round = prefRound
         body.accessType = prefAccessType
         body.accessStatus = prefStatus === "Active" && prefAccessType !== "No Access" ? "Active" : "No Access"
-        body.percentile = 95
       } else if (modalType === "delete") {
         // Delete request uses DELETE method
         const res = await fetch(`/api/admin/users?userId=${selectedStudent.id}`, {
