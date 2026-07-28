@@ -1,0 +1,7 @@
+{
+  "name": "admitwise-root",
+  "version": "0.1.2",
+  "dependencies": {
+    "motion": "^12.42.2"
+  }
+}
