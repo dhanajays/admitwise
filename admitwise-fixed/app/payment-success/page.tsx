@@ -82,7 +82,7 @@ Mobile: ${userPhone}
 Order ID: ${orderId}
 Thank you.`
 
-    return `https://wa.me/919209568186?text=${encodeURIComponent(message)}`
+    return `https://wa.me/919527474623?text=${encodeURIComponent(message)}`
   }
 
   if (loading) {

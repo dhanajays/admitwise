@@ -209,7 +209,7 @@ async function main() {
       key: "contact",
       value: JSON.stringify({
         email: "admitwisehelp@gmail.com",
-        phone: "+91 9209568186",
+        phone: "+91 9527474623",
         address: "Pune, Maharashtra, India",
         businessHours: "Mon–Sat, 10am – 7pm IST",
       }),

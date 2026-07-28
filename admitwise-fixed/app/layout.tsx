@@ -58,13 +58,6 @@ export default function RootLayout({
         </AuthSessionProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
         <GoogleAnalytics gaId="G-N2DR6NTG75" />
-        <Script
-          type="text/javascript"
-          src="https://d3mkw6s8thqya7.cloudfront.net/integration-plugin.js"
-          id="aisensy-wa-widget"
-          widget-id="aab30d"
-          strategy="afterInteractive"
-        />
       </body>
     </html>
   )

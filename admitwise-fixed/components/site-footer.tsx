@@ -57,7 +57,7 @@ export function SiteFooter() {
                 <Mail className="h-4 w-4 text-blue-500" /> support@admitwiseedu.com
               </p>
               <p className="flex items-center gap-2.5 text-slate-500 hover:text-blue-600 transition duration-300">
-                <Phone className="h-4 w-4 text-blue-500" /> +91 9209568186
+                <Phone className="h-4 w-4 text-blue-500" /> +91 9527474623
               </p>
               <p className="flex items-center gap-2.5 text-slate-500 hover:text-blue-600 transition duration-300">
                 <MapPin className="h-4 w-4 text-blue-500" /> Pune, Maharashtra, India

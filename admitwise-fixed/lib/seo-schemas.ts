@@ -69,7 +69,7 @@ export function getOrganizationSchema() {
     "description": "India's leading AI-powered college admission predictor and counselling guidance platform for MHT CET Engineering and Medical aspirants.",
     "contactPoint": {
       "@type": "ContactPoint",
-      "telephone": "+91-9209568186",
+      "telephone": "+91-9527474623",
       "contactType": "customer support",
       "email": "support@admitwiseedu.com",
       "areaServed": "IN",
